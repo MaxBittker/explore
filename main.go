@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,9 +43,17 @@ func main() {
 	app.RunAndExitOnError()
 }
 
+type imageMeta struct {
+	Id       int
+	Width    int
+	Height   int
+	Thumb    string
+	Distance float64
+}
 type Server struct {
-	db     *gorm.DB
-	userLk sync.Mutex
+	db           *gorm.DB
+	cachedRandom []imageMeta
+	userLk       sync.Mutex
 }
 
 var runCmd = &cli.Command{
@@ -132,10 +141,110 @@ var runCmd = &cli.Command{
 			select {}
 		}
 
+		err = s.db.Debug().Raw(
+			fmt.Sprintf(
+				`
+				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height
+				FROM blocks
+				WHERE blocks.thumb IS NOT NULL
+				and blocks.embedding is not null
+				ORDER BY random()
+				LIMIT %d
+			`, 1500)).Scan(&s.cachedRandom).Error
+
+		if err != nil {
+			log.Error(err)
+		}
 		select {}
 
-		return nil
 	},
+}
+
+func (s *Server) handleGetNeighbors(e echo.Context) error {
+
+	blockId := e.QueryParam("id")
+	var limit int = 35
+	if lims := e.QueryParam("limit"); lims != "" {
+		v, err := strconv.Atoi(lims)
+		if err != nil {
+			return err
+		}
+		limit = v
+	}
+	var offset int = 0
+	if off := e.QueryParam("offset"); off != "" {
+		v, err := strconv.Atoi(off)
+		if err != nil {
+			return err
+		}
+		offset = v
+	}
+
+	var err error
+
+	var images []imageMeta
+
+	s.db.Exec("SET hnsw.ef_search = 150;")
+
+	if blockId == "" || blockId == "null" || blockId == "undefined" {
+
+		// select 45 random items from cachedRandom
+		images = make([]imageMeta, limit)
+		for i := 0; i < limit; i++ {
+			images[i] = s.cachedRandom[rand.Intn(len(s.cachedRandom))]
+		}
+
+	} else {
+
+		err = s.db.Debug().Raw(
+			fmt.Sprintf(
+				`
+			SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.embedding <#> 
+			(SELECT embedding FROM blocks WHERE id = %s) as Distance
+			FROM blocks
+			WHERE blocks.thumb IS NOT NULL
+			and blocks.embedding is not null
+			ORDER BY blocks.embedding <#> 
+				(SELECT embedding FROM blocks WHERE id = %s)
+			LIMIT %d
+			OFFSET %d
+		
+		`, blockId, blockId, limit, offset)).Scan(&images).Error
+		if err != nil {
+			log.Error(err)
+			return &echo.HTTPError{
+				Code:    500,
+				Message: fmt.Sprintf("neighbors failed: %s", err),
+			}
+		}
+		// remove images with too similar values for distance
+		// var filteredImages []imageMeta
+		// var lastDistance = 10.0
+		// for _, img := range images {
+		// 	delta := math.Abs(img.Distance - lastDistance)
+		// 	log.Error(delta)
+
+		// 	if delta > 0.00005 {
+		// 		filteredImages = append(filteredImages, img)
+		// 	} else {
+		// 		img.Height = 1000
+		// 		filteredImages = append(filteredImages, img)
+
+		// 		log.Error(img.Thumb)
+		// 	}
+		// 	lastDistance = img.Distance
+		// }
+		// images = filteredImages
+	}
+
+	type neighborsResults struct {
+		Images []imageMeta `json:"images"`
+	}
+
+	return e.JSON(200, neighborsResults{
+		Images: images,
+	})
+
 }
 
 func (s *Server) projectAllEmbeddings(ctx context.Context) error {
@@ -212,63 +321,6 @@ func (s *Server) projectAllEmbeddings(ctx context.Context) error {
 		wg.Wait() // Wait for all goroutines to finish.
 	}
 	return nil
-}
-
-func (s *Server) handleGetNeighbors(e echo.Context) error {
-
-	embedding := e.QueryParam("embedding")
-	var limit int = 40
-	if lims := e.QueryParam("limit"); lims != "" {
-		v, err := strconv.Atoi(lims)
-		if err != nil {
-			return err
-		}
-		limit = v
-	}
-	var err error
-
-	// var cursor *string
-	// if c := e.QueryParam("cursor"); c != "" {
-	// 	cursor = &c
-	// }
-
-	type imageMeta struct {
-		Id        int64
-		Thumb     string
-		Embedding string
-	}
-	var images []imageMeta
-
-	s.db.Exec("SET hnsw.ef_search = 150;")
-
-	err = s.db.Debug().Raw(
-		fmt.Sprintf(
-			`
-			SELECT blocks.id as Id, blocks.thumb as Thumb,  blocks.embedding as Embedding
-			FROM blocks
-			WHERE blocks.thumb IS NOT NULL
-			and blocks.embedding is not null
-			ORDER BY blocks.embedding <#> '%s'
-			LIMIT %d
-		
-		`, embedding, limit)).Scan(&images).Error
-
-	if err != nil {
-		log.Error(err)
-		return &echo.HTTPError{
-			Code:    500,
-			Message: fmt.Sprintf("neighbors failed: %s", err),
-		}
-	}
-
-	type neighborsResults struct {
-		Images []imageMeta `json:"images"`
-	}
-
-	return e.JSON(200, neighborsResults{
-		Images: images,
-	})
-
 }
 
 func NormalizeVector(vec []float64) {
