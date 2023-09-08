@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import VisibilitySensor from "react-visibility-sensor";
 import { ArrowTopRightIcon } from "@radix-ui/react-icons";
 import seedrandom from "seedrandom";
-import { useWindowSize,useLocalStorage } from "usehooks-ts";
+import { useWindowSize, useLocalStorage } from "usehooks-ts";
 
 
 import useSound from "use-sound";
@@ -35,10 +35,10 @@ export default function App() {
   const [error, setError] = useState(null);
   const [play] = useSound(block, { volume: 0.1 });
 
-    let columns = Math.round(width / 225);
+  let columns = Math.round(width / 225);
   columns = Math.max(columns, 3);
   columns = Math.min(columns, 9);
-  
+
   useEffect(() => {
     setLoading(true);
     fetch(
@@ -153,11 +153,11 @@ export default function App() {
         >
           <img src={spiral} title="spiral" />
         </button>
-        
-          <Info
-            infoOpen={infoOpen}
-            setInfoOpen={setInfoOpen}
-          ></Info>
+
+        <Info
+          infoOpen={infoOpen}
+          setInfoOpen={setInfoOpen}
+        ></Info>
       </div>
       <div style={{ display: "flex" }}>
         {images.map((list, index) => {

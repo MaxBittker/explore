@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 import click from '../public/block.wav';
 import useSound from "use-sound";
-
+import home from '../public/home.svg';
+import x from '../public/x.svg';
 export default function Info({ style, setInfoOpen, infoOpen }) {
   const [play] = useSound(click, { volume: 0.1 });
 
@@ -15,7 +16,7 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
         play()
       }}
     >
-      <img src="public/home.svg" title="home" />
+      <img src={home} title="home" />
     </button>)
   }
   return (
@@ -32,10 +33,11 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
       <div className="info" style={style}>
         <span>
           <button className="close" onClick={() => {
-        play()
-      
-      setInfoOpen(false)}}>
-            <img src="public/x.svg" alt="home" />
+            play()
+
+            setInfoOpen(false)
+          }}>
+            <img src={x} alt="home" />
           </button>
 
           <img src="public/attention.gif" id="atn"></img>
