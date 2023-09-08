@@ -2,22 +2,20 @@ import "./App.css";
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import VisibilitySensor from "react-visibility-sensor";
-import { ArrowTopRightIcon } from "@radix-ui/react-icons";
 import seedrandom from "seedrandom";
 import { useWindowSize, useLocalStorage } from "usehooks-ts";
 
 
 import useSound from "use-sound";
-import block from "../public/blockshort.wav";
 import spiral from "../public/spiral.svg";
 import back from "../public/back.svg";
 import Info from "./Info";
+import Block from "./Block";
 // import castanet from '../public/castanet.wav';
 // import click from '../public/click.wav';
-// import hit from '../public/hit.wav';
+import hit from '../public/castanet.wav';
 
-let last_hit = 0;
-let count = 10;
+window.count = 10;
 
 export default function App() {
   // fetch data from api
@@ -33,7 +31,7 @@ export default function App() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [play] = useSound(block, { volume: 0.1 });
+  const [playHit] = useSound(hit, { volume: 0.3 });
 
   let columns = Math.round(width / 225);
   columns = Math.max(columns, 3);
@@ -52,27 +50,16 @@ export default function App() {
       .then((res) => res.json())
       .then((newData) => {
         let newImages = newData.images;
-        const minDiff = 0.0001; // Define the minimum difference to consider. Adjust as needed.
-        if (newImages[0].Distance) {
-          newImages = newImages.reduce((acc, item) => {
-            if (acc.length === 0) {
-              return acc.concat(item);
-            }
-            const lastItem = acc[acc.length - 1];
-            const diff = Math.abs(lastItem.Distance - item.Distance);
-            if (diff < minDiff) {
-              // console.log(item.Thumb);
-              return acc;
-            } else {
-              return acc.concat(item);
-            }
-          }, []);
+        if (!newImages) {
+          playHit({ playbackRate: 0.5 })
+          return
+
         }
 
         setData(newImages);
         shuffleArray(newImages);
         console.log(offset);
-        count = 10;
+        window.count = 10;
         if (offset > 0) {
           setData([...data, ...newImages]);
           let newColumns = collateListBalanced(
@@ -82,21 +69,26 @@ export default function App() {
             images,
           );
           setImages(newColumns);
-
-          // setImages([...images, ...newImages]);
         } else {
-          // console.log(newImages);
 
-          // let {x, y} = lastItem ;
           setData(newImages);
 
           let oldColumns = images.map((c, i) => {
             if (i === lastItem?.x) {
-              return c.slice(0, lastItem.y + 1);
+              if (window.scrollY > 0) {
+                lastItem.y = 0;
+                setLastItem({ ...lastItem })
+                return [lastItem]
+              } else {
+                return c.slice(0, lastItem.y + 1);
+              }
             } else {
               return [];
             }
           });
+          if (offset === 0) {
+            window.scrollTo(0, 0);
+          }
           let newColumns = collateListBalanced(
             newImages,
             columns,
@@ -131,7 +123,7 @@ export default function App() {
   }, [id, offset, columns]);
 
 
-  let cWidth = Math.round(width / columns);
+  let cWidth = width / columns;
 
   return (
     <main>
@@ -153,12 +145,14 @@ export default function App() {
         >
           <img src={spiral} title="spiral" />
         </button>
-
+      </div>
+      <div className="button-row right">
         <Info
           infoOpen={infoOpen}
           setInfoOpen={setInfoOpen}
         ></Info>
       </div>
+
       <div style={{ display: "flex" }}>
         {images.map((list, index) => {
           return (
@@ -166,78 +160,23 @@ export default function App() {
               key={index}
               style={{ display: "flex", flexDirection: "column" }}
             >
-              {list.map((item, i) => {
-                let aspectRatio = item.Width / item.Height;
-                let w = cWidth;
-                let h = cWidth / aspectRatio;
-
-                return (
-                  <div
-                    key={i}
-                    className={"img-container"}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setOffset(0);
-                      setLastItem({ ...item, x: index, y: i });
-                      setSearchParams({
-                        id: item.Id,
-                      });
-                      window.scrollTo(0, 0);
-                      // play()
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      let url = "https://www.are.na/block/" + item.Id;
-                      window.open(url, "_blank").focus();
-                    }}
-                  >
-                    <img
-                      width={w}
-                      height={h}
-                      style={{
-                        width: w + "px",
-                        height: h + "px",
-                      }}
-                      key={i}
-                      src={item.Thumb}
-                      onLoad={(e) => {
-                        if (!elementIsVisibleInViewport(e.target)) {
-                          return;
-                        }
-                        let t0 = performance.now();
-                        if (count > 0 && t0 - last_hit > 30) {
-                          count--;
-                          play({
-                            playbackRate: Math.random() * 0.2 + 0.6 + i * 0.1,
-                          });
-                          last_hit = t0;
-                        }
-                      }}
-                    ></img>
-                    <button className="corner-button" title="View on Are.na">
-                      <ArrowTopRightIcon
-                        onClick={() => {
-                          let url = "https://www.are.na/block/" + item.Id;
-                          window.open(url, "_blank").focus();
-                        }}
-                      />
-                    </button>
-                  </div>
-                );
-              })}
-
-              {index == 0 && (
-                <VisibilitySensor
-                  onChange={(isVisible) => {
-                    console.log(isVisible, loading, error);
-                    if (!loading && !error && isVisible) {
-                      setOffset(data?.length ?? 0);
-                    }
-                  }}
-                >
-                  <div>...</div>
-                </VisibilitySensor>
-              )}
+              {list.map((item, i) => <Block
+                key={i}
+                item={item} i={i} index={index}
+                cWidth={cWidth}
+                setLastItem={setLastItem}
+                setOffset={setOffset}
+                setSearchParams={setSearchParams} />)}
+              <VisibilitySensor
+                onChange={(isVisible) => {
+                  // console.log(isVisible, loading, error);
+                  if (!loading && !error && isVisible) {
+                    setOffset(data?.length ?? 0);
+                  }
+                }}
+              >
+                <div className="bottom">∎∎∎</div>
+              </VisibilitySensor>
             </div>
           );
         })}
@@ -246,9 +185,6 @@ export default function App() {
   );
 }
 
-function aspectRatio(Item) {
-  return Item.Width / Item.Height;
-}
 
 function collateListBalanced(newItems, columns, lastItem, oldColumns) {
   lastItem = lastItem ?? {};
@@ -276,8 +212,6 @@ function collateListBalanced(newItems, columns, lastItem, oldColumns) {
     let item = list[i];
     let minHeight = Math.min(...heights); // Find the smallest height
     let index = heights.findIndex((height) => height === minHeight); // first column w smallest height
-    let x = index;
-    let y = result[index].length;
     i++;
     let aspectRatio = item.Height / item.Width;
     result[index].push(item); // Push this item into the column with the smallest height
@@ -295,12 +229,3 @@ function shuffleArray(array) {
   }
 }
 
-const elementIsVisibleInViewport = (el, partiallyVisible = false) => {
-  const { top, left, bottom, right } = el.getBoundingClientRect();
-  const { innerHeight, innerWidth } = window;
-  return partiallyVisible
-    ? ((top > 0 && top < innerHeight) ||
-      (bottom > 0 && bottom < innerHeight)) &&
-    ((left > 0 && left < innerWidth) || (right > 0 && right < innerWidth))
-    : top >= 0 && left >= 0 && bottom <= innerHeight && right <= innerWidth;
-};

@@ -1,15 +1,16 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"html/template"
+	"io"
+	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
-	"time"
 
 	cliutil "github.com/bluesky-social/indigo/util/cliutil"
 	"github.com/getsentry/sentry-go"
@@ -17,12 +18,10 @@ import (
 	logging "github.com/ipfs/go-log"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/pgvector/pgvector-go"
 
 	// . "github.com/whyrusleeping/algoz/models"
 	"golang.org/x/crypto/acme/autocert"
 	"gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/mat"
 
 	cli "github.com/urfave/cli/v2"
 
@@ -54,6 +53,18 @@ type Server struct {
 	db           *gorm.DB
 	cachedRandom []imageMeta
 	userLk       sync.Mutex
+}
+
+type Template struct {
+	templates *template.Template
+}
+
+func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	return t.templates.ExecuteTemplate(w, name, data)
+}
+
+type PageData struct {
+	OgImage string
 }
 
 var runCmd = &cli.Command{
@@ -98,6 +109,33 @@ var runCmd = &cli.Command{
 		e.Use(middleware.Logger())
 		e.Use(middleware.Recover())
 		e.Use(middleware.CORS())
+		e.Static("/", "site/dist")
+
+		e.Renderer = &Template{
+			templates: template.Must(template.ParseGlob("site/dist/*.html")),
+		}
+		e.GET("/", func(c echo.Context) error {
+			var ogImage string
+			query := c.Request().URL.Query()
+			if query.Get("id") != "" {
+				id := query.Get("id")
+				var image *imageMeta
+				db.Raw(fmt.Sprintf(`
+				SELECT blocks.display as Thumb
+				FROM blocks
+				WHERE id = %s
+				LIMIT 1
+				`, id)).Scan(&image)
+				ogImage = image.Thumb
+			} else {
+				ogImage = "default_og_image.jpg"
+			}
+			data := &PageData{
+				OgImage: ogImage,
+			}
+			return c.Render(http.StatusOK, "index.html", data)
+		})
+
 		e.Use(sentryecho.New(sentryecho.Options{}))
 
 		// e.HTTPErrorHandler = func(err error, c echo.Context) {
@@ -184,21 +222,21 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 
 	var images []imageMeta
 
-	s.db.Exec("SET hnsw.ef_search = 150;")
-
+	s.db.Exec("SET hnsw.ef_search = 100;")
 	if blockId == "" || blockId == "null" || blockId == "undefined" {
 
 		// select 45 random items from cachedRandom
-		images = make([]imageMeta, limit)
-		for i := 0; i < limit; i++ {
-			images[i] = s.cachedRandom[rand.Intn(len(s.cachedRandom))]
-		}
+		// images = make([]imageMeta, limit)
+		// for i := 0; i < limit; i++ {
+		// convert int to string:
+		blockId = strconv.Itoa(s.cachedRandom[rand.Intn(len(s.cachedRandom))].Id)
+		// }
 
-	} else {
+	}
 
-		err = s.db.Debug().Raw(
-			fmt.Sprintf(
-				`
+	err = s.db.Debug().Raw(
+		fmt.Sprintf(
+			`
 			SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.embedding <#> 
 			(SELECT embedding FROM blocks WHERE id = %s) as Distance
 			FROM blocks
@@ -210,32 +248,38 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 			OFFSET %d
 		
 		`, blockId, blockId, limit, offset)).Scan(&images).Error
-		if err != nil {
-			log.Error(err)
-			return &echo.HTTPError{
-				Code:    500,
-				Message: fmt.Sprintf("neighbors failed: %s", err),
-			}
+
+	if err != nil {
+		log.Error(err)
+		return &echo.HTTPError{
+			Code:    500,
+			Message: fmt.Sprintf("neighbors failed: %s", err),
 		}
-		// remove images with too similar values for distance
-		// var filteredImages []imageMeta
-		// var lastDistance = 10.0
-		// for _, img := range images {
-		// 	delta := math.Abs(img.Distance - lastDistance)
-		// 	log.Error(delta)
-
-		// 	if delta > 0.00005 {
-		// 		filteredImages = append(filteredImages, img)
-		// 	} else {
-		// 		img.Height = 1000
-		// 		filteredImages = append(filteredImages, img)
-
-		// 		log.Error(img.Thumb)
-		// 	}
-		// 	lastDistance = img.Distance
-		// }
-		// images = filteredImages
 	}
+
+	if offset == 0 {
+		go func(blockId string) {
+			s.db.Exec(fmt.Sprintf("UPDATE blocks SET votes = votes + 1 where id = %s", blockId))
+		}(blockId)
+	}
+
+	// remove images with too similar values for distance
+	var filteredImages []imageMeta
+	var lastDistance = 10.0
+	for _, img := range images {
+		delta := math.Abs(img.Distance - lastDistance)
+		log.Error(delta)
+
+		if delta > 0.00005 {
+			filteredImages = append(filteredImages, img)
+		} else {
+			// img.Height = 1000
+			// filteredImages = append(filteredImages, img)
+			// log.Error(img.Thumb)
+		}
+		lastDistance = img.Distance
+	}
+	images = filteredImages
 
 	type neighborsResults struct {
 		Images []imageMeta `json:"images"`
@@ -245,82 +289,6 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 		Images: images,
 	})
 
-}
-
-func (s *Server) projectAllEmbeddings(ctx context.Context) error {
-	c := time.Tick(1000 * time.Millisecond)
-	v1 := readCSV("components.csv")
-	// log.Error(v1.Dims())
-	for range c {
-		type imageMeta struct {
-			Ref       uint
-			Embedding pgvector.Vector
-			Hash      string
-		}
-
-		var images []imageMeta
-
-		s.db.Raw(`
-		SELECT images.embedding as Embedding, images.ref as Ref, images.hash as Hash
-		FROM images
-		WHERE images.pca_embedding is null
-		and images.embedding is not null
-		and images.hash is not null
-		LIMIT 10
-		`).Scan(&images)
-
-		// sum := mat.NewVecDense(512, nil)
-		var wg sync.WaitGroup
-
-		for _, img := range images {
-			wg.Add(1)
-			go func(imgMeta *imageMeta) {
-				defer wg.Done()
-
-				v32 := imgMeta.Embedding.Slice()
-				v64 := make([]float64, len(v32))
-				for i, a := range v32 {
-					v64[i] = float64(a)
-				}
-				NormalizeVector(v64)
-				// log.Error(len(v64))
-				vV := mat.NewDense(1, 512, v64)
-
-				var multiplyResult mat.Dense
-				multiplyResult.Mul(vV, v1)
-
-				// log.Error(multiplyResult.Dims())
-
-				result := mat.NewDense(1, 128, nil)
-				// Multiply a with bT.
-				result.Mul(vV, v1)
-
-				// Output the result to verify.
-				fa := mat.Formatted(result, mat.Prefix(""), mat.Squeeze())
-				va := fmt.Sprintf("%v", fa)
-				// replace all spaces with commas:
-				va = strings.Replace(va, "  ", ",", -1)
-				// log.Error(va)
-
-				// values += fmt.Sprintf(`pca_embedding = CASE WHEN hash = '%s' THEN pc '%s'),`, va, imgMeta.Hash)
-
-				s.db.Exec(fmt.Sprintf("UPDATE images SET pca_embedding = '%s' where hash = '%s'", va, imgMeta.Hash))
-			}(&img)
-		}
-		// remove last comma from values
-		// values = values[:len(values)-1]
-		// s.db.Exec(fmt.Sprintf(`
-		// UPDATE images SET
-		// 	pca_embedding = v.pca_embedding
-		// 	FROM (VALUES
-		// 		%s
-		// 	) as v(pca_embedding, hash)
-		// WHERE i.hash = v.hash`, values))
-		// Consumers.
-
-		wg.Wait() // Wait for all goroutines to finish.
-	}
-	return nil
 }
 
 func NormalizeVector(vec []float64) {

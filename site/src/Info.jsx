@@ -24,7 +24,7 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
       disableDragging={window.innerWidth < 800}
       enableResizing={false}
       default={{
-        x: 55,
+        x: -320,
         y: -1,
         width: 320,
         height: 200,
@@ -34,7 +34,6 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
         <span>
           <button className="close" onClick={() => {
             play()
-
             setInfoOpen(false)
           }}>
             <img src={x} alt="home" />
