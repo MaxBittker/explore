@@ -5,6 +5,8 @@ import useSound from "use-sound";
 import home from '../public/info.svg';
 import x from '../public/x.svg';
 import attention from '../public/attention.gif';
+import { ArrowTopRightIcon } from "@radix-ui/react-icons";
+
 export default function Info({ style, setInfoOpen, infoOpen }) {
   const [play] = useSound(click, { volume: 0.1 });
 
@@ -41,11 +43,13 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           </button>
 
           <img src={attention} id="atn"></img>
-          This is a visual connection engine. It helps you explore laterally though image space.
+          River is a visual connection engine.
+          <br />
+          Clear your mind and surf laterally though image space.
           <br />
           <br />
           Images curated by <a href="https://are.na">Are.na</a> community.
-          Right click for source.
+          Click  <ArrowTopRightIcon /> on the top right of any image to view it on Are.na.
           <br />
           <br />
         </span>

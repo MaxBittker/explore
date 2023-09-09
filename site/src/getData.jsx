@@ -10,27 +10,44 @@ export default function useGetData(id, colCount) {
     const [columns, setColumns] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [wanderId, setWanderId] = useState(null);
+    const [offsetOffset, setOffsetOffset] = useState(0);
+    useEffect(() => {
+        setWanderId(null)
+        setOffsetOffset(0)
+    }, [id])
+
 
     useEffect(() => {
         setLoading(true);
-        console.log("fetching: " + id + " offset: " + offset + " limit: " + 8 * colCount)
         let multiplier = id ? 8 : 4;
-        fetch(
-            "https://river.maxbittker.com/neighbors?" +
+        let computedOffset = offset - offsetOffset;
+        if (computedOffset < 0) {
+            return
+        }
+        let url = "https://river.maxbittker.com/neighbors?" +
             new URLSearchParams({
-                id: id,
-                offset: offset,
-                limit: multiplier * colCount
-            }),
-        )
+                id: wanderId || id,
+                limit: multiplier * colCount,
+                offset: computedOffset
+            });
+        // console.log(url)
+        fetch(url)
             .then((res) => res.json())
             .then((newData) => {
-                let newImages = newData.images;
-                if (!newImages) {
+                let newImages = newData?.images;
+                newImages = newOnly(newImages || [], images);
+
+                if (!newImages || newImages.length == 0) {
+                    console.log("END!")
+                    setWanderId(images[images.length - 1].Id)
+                    setOffsetOffset(offset)
                     return
                 }
+
                 shuffleArray(newImages);
                 window.count = 10;
+
                 setImages([...images, ...newImages]);
                 setFreshImages([...freshImages, ...newImages])
                 setError(null);
@@ -45,7 +62,7 @@ export default function useGetData(id, colCount) {
         return () => {
             setLoading(false);
         };
-    }, [id, offset, colCount]);
+    }, [id, offset, wanderId, colCount]);
 
     useEffect(() => {
         if (freshImages.length === 0) return
@@ -88,13 +105,11 @@ export default function useGetData(id, colCount) {
 
 
 function collateListBalanced(newItems, columns, oldColumns) {
-    let skipList = {};
     let heights = Array(columns).fill(0);
     if (oldColumns) {
         heights = heights.map(
             (h, i) =>
                 oldColumns[i]?.reduce((a, b) => {
-                    skipList[b.Id] = true;
                     return a + b?.Height / b?.Width;
                 }, 0) ?? 0,
         );
@@ -106,7 +121,7 @@ function collateListBalanced(newItems, columns, oldColumns) {
             result[i] = list;
         });
     }
-    let list = newItems.filter((item) => !skipList[item.Id]);
+    let list = newItems;
     let i = 0;
     while (i < list.length) {
         let item = list[i];
@@ -119,6 +134,13 @@ function collateListBalanced(newItems, columns, oldColumns) {
     }
 
     return result;
+}
+function newOnly(news, old) {
+    let skipList = {};
+    old.forEach((item) => {
+        skipList[item.Id] = true;
+    });
+    return news.filter((item) => !skipList[item.Id]);
 }
 
 function shuffleArray(array) {
