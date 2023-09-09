@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -186,6 +187,7 @@ var runCmd = &cli.Command{
 				FROM blocks
 				WHERE blocks.thumb IS NOT NULL
 				and blocks.embedding is not null
+				and nsfw is not true
 				ORDER BY random()
 				LIMIT %d
 			`, 1500)).Scan(&s.cachedRandom).Error
@@ -242,13 +244,13 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 			FROM blocks
 			WHERE blocks.thumb IS NOT NULL
 			and blocks.embedding is not null
+			and nsfw is not true
 			ORDER BY blocks.embedding <#> 
 				(SELECT embedding FROM blocks WHERE id = %s)
 			LIMIT %d
 			OFFSET %d
 		
 		`, blockId, blockId, limit, offset)).Scan(&images).Error
-
 	if err != nil {
 		log.Error(err)
 		return &echo.HTTPError{
@@ -266,20 +268,29 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 	// remove images with too similar values for distance
 	var filteredImages []imageMeta
 	var lastDistance = 10.0
+	var sortedDeltas = []float64{}
+
 	for _, img := range images {
 		delta := math.Abs(img.Distance - lastDistance)
-		log.Error(delta)
-
-		if delta > 0.00005 {
+		lastDistance = img.Distance
+		sortedDeltas = append(sortedDeltas, delta)
+	}
+	sort.Float64s(sortedDeltas)
+	threshholdI := int(float64(limit) * .15)
+	threshholdI = Min(threshholdI, len(images)-1)
+	// sortDelta:
+	for _, img := range images {
+		delta := math.Abs(img.Distance - lastDistance)
+		if delta > sortedDeltas[threshholdI] || threshholdI == 0 {
+			// insert delta to sorted deltas:
 			filteredImages = append(filteredImages, img)
 		} else {
-			// img.Height = 1000
-			// filteredImages = append(filteredImages, img)
-			// log.Error(img.Thumb)
+			threshholdI--
 		}
-		lastDistance = img.Distance
 	}
-	images = filteredImages
+	if len(filteredImages) > 0 {
+		images = filteredImages
+	}
 
 	type neighborsResults struct {
 		Images []imageMeta `json:"images"`
@@ -301,4 +312,11 @@ func NormalizeVector(vec []float64) {
 			vec[i] /= norm
 		}
 	}
+}
+
+func Min(x, y int) int {
+	if x > y {
+		return y
+	}
+	return x
 }

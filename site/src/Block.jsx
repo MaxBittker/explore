@@ -1,33 +1,35 @@
 
 import { ArrowTopRightIcon } from "@radix-ui/react-icons";
+import { Link } from "react-router-dom";
+
 import useSound from "use-sound";
-import block from "../public/blockshort.wav";
 
 let last_hit = 0;
-export default function Block({ item, i, index, cWidth, setOffset, setLastItem, setSearchParams }) {
+export default function Block({ item, i, index, cWidth, setOffset, setLastItem, play, setSearchParams }) {
 
-    const [play] = useSound(block, { volume: 0.1 });
 
     let aspectRatio = item.Width / item.Height;
     let w = cWidth;
     let h = cWidth / aspectRatio;
 
     return (
-        <div
+        <Link
+            to={'?id=' + item.Id}
             className={"img-container"}
+            // onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onClick={(e) => {
-                e.preventDefault();
+                // e.preventDefault();
                 setOffset(0);
                 setLastItem({ ...item, x: index, y: i });
-                setSearchParams({
-                    id: item.Id,
-                });
+                // setSearchParams({
+                //     id: item.Id,
+                // });
                 // play()
             }}
             onContextMenu={(e) => {
-                e.preventDefault();
-                let url = "https://www.are.na/block/" + item.Id;
-                window.open(url, "_blank").focus();
+                // e.preventDefault();
+                // let url = "https://www.are.na/block/" + item.Id;
+                // window.open(url, "_blank").focus();
             }}
         >
             <img
@@ -61,7 +63,7 @@ export default function Block({ item, i, index, cWidth, setOffset, setLastItem, 
                     }}
                 />
             </button>
-        </div>
+        </Link>
     );
 }
 

@@ -4,19 +4,14 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import VisibilitySensor from "react-visibility-sensor";
 import seedrandom from "seedrandom";
 import { useWindowSize, useLocalStorage } from "usehooks-ts";
-
-
 import useSound from "use-sound";
 import spiral from "../public/spiral.svg";
 import back from "../public/back.svg";
 import Info from "./Info";
 import Block from "./Block";
-// import castanet from '../public/castanet.wav';
-// import click from '../public/click.wav';
-import hit from '../public/castanet.wav';
+import block from "../public/blockshort.wav";
 
 window.count = 10;
-
 export default function App() {
   // fetch data from api
   const { width, height } = useWindowSize();
@@ -29,36 +24,34 @@ export default function App() {
   const id = searchParams.get("id");
   const navigate = useNavigate();
 
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [playHit] = useSound(hit, { volume: 0.3 });
+  const [play] = useSound(block, { volume: 0.1 });
 
   let columns = Math.round(width / 225);
-  columns = Math.max(columns, 3);
-  columns = Math.min(columns, 9);
+  columns = clamp(columns, 3, 9)
 
   useEffect(() => {
+    if (loading) return
     setLoading(true);
+    console.log(offset)
     fetch(
-      "https://explore.maxbittker.com/neighbors?" +
+      "https://river.maxbittker.com/neighbors?" +
       new URLSearchParams({
         id: id,
         offset: offset,
-        limit: 6 * columns
+        limit: 8 * columns
       }),
     )
       .then((res) => res.json())
       .then((newData) => {
         let newImages = newData.images;
         if (!newImages) {
-          playHit({ playbackRate: 0.5 })
           return
-
         }
 
-        setData(newImages);
         shuffleArray(newImages);
-        console.log(offset);
         window.count = 10;
         if (offset > 0) {
           setData([...data, ...newImages]);
@@ -70,7 +63,6 @@ export default function App() {
           );
           setImages(newColumns);
         } else {
-
           setData(newImages);
 
           let oldColumns = images.map((c, i) => {
@@ -96,18 +88,6 @@ export default function App() {
             oldColumns,
           );
           setImages(newColumns);
-          // let images = newData.images.map((item, i) => {
-          //   let img = new Image();
-          //   img.src = item.Thumb;
-          //   item.img = img;
-          //   img.onload = () => {
-          //     // setData((data) => {
-          //     //   data[i] = item;
-          //     //   return [...data]
-          //     // });
-          //   };
-          //   return item;
-          // });
         }
         setError(null);
       })
@@ -118,7 +98,7 @@ export default function App() {
       .finally(() => setLoading(false));
 
     return () => {
-      setLoading(false);
+      // setLoading(false);
     };
   }, [id, offset, columns]);
 
@@ -161,21 +141,27 @@ export default function App() {
               style={{ display: "flex", flexDirection: "column" }}
             >
               {list.map((item, i) => <Block
-                key={i}
+                key={item.Id}
                 item={item} i={i} index={index}
                 cWidth={cWidth}
                 setLastItem={setLastItem}
                 setOffset={setOffset}
-                setSearchParams={setSearchParams} />)}
+                setSearchParams={setSearchParams}
+                play={play} />)}
               <VisibilitySensor
                 onChange={(isVisible) => {
-                  // console.log(isVisible, loading, error);
-                  if (!loading && !error && isVisible) {
-                    setOffset(data?.length ?? 0);
+                  if (isVisible && !loading && !error) {
+                    setOffset((data?.length ?? 0));
                   }
                 }}
               >
-                <div className="bottom">∎∎∎</div>
+                {({ isVisible }) => {
+                  if (isVisible && !loading && !error) {
+                    setOffset((data?.length ?? 0));
+                  }
+                  return <div className="bottom">∎∎∎</div>
+                }
+                }
               </VisibilitySensor>
             </div>
           );
@@ -229,3 +215,4 @@ function shuffleArray(array) {
   }
 }
 
+const clamp = (val, min, max) => Math.min(Math.max(val, min), max)

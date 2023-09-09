@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 import click from '../public/block.wav';
 import useSound from "use-sound";
-import home from '../public/home.svg';
+import home from '../public/info.svg';
 import x from '../public/x.svg';
+import attention from '../public/attention.gif';
 export default function Info({ style, setInfoOpen, infoOpen }) {
   const [play] = useSound(click, { volume: 0.1 });
 
@@ -24,7 +25,7 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
       disableDragging={window.innerWidth < 800}
       enableResizing={false}
       default={{
-        x: -320,
+        x: -318,
         y: -1,
         width: 320,
         height: 200,
@@ -39,7 +40,7 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
             <img src={x} alt="home" />
           </button>
 
-          <img src="public/attention.gif" id="atn"></img>
+          <img src={attention} id="atn"></img>
           This is a visual connection engine. It helps you explore laterally though image space.
           <br />
           <br />
