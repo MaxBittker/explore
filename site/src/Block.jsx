@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import useSound from "use-sound";
 
 let last_hit = 0;
-export default function Block({ item, i, index, cWidth, setOffset, setLastItem, play, setSearchParams }) {
+export default function Block({ item, i, index, cWidth, reset, setLastItem, play, setSearchParams }) {
 
 
     let aspectRatio = item.Width / item.Height;
@@ -19,7 +19,7 @@ export default function Block({ item, i, index, cWidth, setOffset, setLastItem, 
             // onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onClick={(e) => {
                 // e.preventDefault();
-                setOffset(0);
+                reset(0);
                 setLastItem({ ...item, x: index, y: i });
                 // setSearchParams({
                 //     id: item.Id,

@@ -1,25 +1,26 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import seedrandom from "seedrandom";
 
-export default function useGetData(id, columns) {
+export default function useGetData(id, colCount) {
     const [lastItem, setLastItem] = useState(null);
     const [offset, setOffset] = useState(0);
 
-    const [data, setData] = useState([]);
     const [images, setImages] = useState([]);
+    const [freshImages, setFreshImages] = useState([]);
+    const [columns, setColumns] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (loading) return
         setLoading(true);
-        console.log(offset)
+        console.log("fetching: " + id + " offset: " + offset + " limit: " + 8 * colCount)
+        let multiplier = id ? 8 : 4;
         fetch(
             "https://river.maxbittker.com/neighbors?" +
             new URLSearchParams({
                 id: id,
                 offset: offset,
-                limit: 8 * columns
+                limit: multiplier * colCount
             }),
         )
             .then((res) => res.json())
@@ -28,71 +29,65 @@ export default function useGetData(id, columns) {
                 if (!newImages) {
                     return
                 }
-
                 shuffleArray(newImages);
                 window.count = 10;
-                if (offset > 0) {
-                    setData([...data, ...newImages]);
-                    let newColumns = collateListBalanced(
-                        newImages,
-                        columns,
-                        lastItem,
-                        images,
-                    );
-                    setImages(newColumns);
-                } else {
-                    setData(newImages);
-
-                    let oldColumns = images.map((c, i) => {
-                        if (i === lastItem?.x) {
-                            if (window.scrollY > 0) {
-                                lastItem.y = 0;
-                                setLastItem({ ...lastItem })
-                                return [lastItem]
-                            } else {
-                                return c.slice(0, lastItem.y + 1);
-                            }
-                        } else {
-                            return [];
-                        }
-                    });
-                    if (offset === 0) {
-                        window.scrollTo(0, 0);
-                    }
-                    let newColumns = collateListBalanced(
-                        newImages,
-                        columns,
-                        lastItem,
-                        oldColumns,
-                    );
-                    setImages(newColumns);
-                }
+                setImages([...images, ...newImages]);
+                setFreshImages([...freshImages, ...newImages])
                 setError(null);
             })
-            .catch((err) => {
-                console.error(err);
-                setError(err);
-            })
             .finally(() => setLoading(false));
+
+        // .catch((err) => {
+        //     console.error(err);
+        //     setError(err);
+        // })
 
         return () => {
             setLoading(false);
         };
-    }, [id, offset, columns]);
+    }, [id, offset, colCount]);
+
+    useEffect(() => {
+        if (freshImages.length === 0) return
+        let remnantColumns = columns;
+        if (offset === 0) {
+            remnantColumns = columns.map((c, i) => {
+                if (i !== lastItem?.x) {
+                    return []
+                }
+                if (window.scrollY > 0) {
+                    lastItem.y = 0;
+                    return [lastItem]
+                }
+                return c.slice(0, lastItem.y + 1);
+            });
+            window.scrollTo(0, 0);
+        }
+        // console.log(remnantColumns, freshImages.length)
+        let newColumns = collateListBalanced(
+            freshImages,
+            colCount,
+            remnantColumns,
+        );
+        setFreshImages([])
+        setColumns(newColumns)
+
+    }, [freshImages, columns, offset, colCount, lastItem])
 
     let reset = useCallback(() => {
         setOffset(0)
+        setImages([])
     }, [setOffset]);
+
     let loadMore = useCallback(() => {
-        setOffset(data.length)
-    }, [setOffset, offset, columns]);
-    return { images, loading, error, setLastItem, reset, loadMore };
+        setOffset(images.length)
+    }, [setOffset, images]);
+    return { columns, loading, error, setLastItem, reset, loadMore };
 }
 
 
 
-function collateListBalanced(newItems, columns, lastItem, oldColumns) {
-    lastItem = lastItem ?? {};
+function collateListBalanced(newItems, columns, oldColumns) {
     let skipList = {};
     let heights = Array(columns).fill(0);
     if (oldColumns) {
