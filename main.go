@@ -148,7 +148,7 @@ var runCmd = &cli.Command{
 		}
 
 		e.GET("/neighbors", s.handleGetNeighbors)
-
+		e.POST("/api/flag", s.handleFlag)
 		atd := cctx.String("auto-tls-domain")
 		if atd != "" {
 			cachedir, err := os.UserCacheDir()
@@ -298,6 +298,30 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 
 	return e.JSON(200, neighborsResults{
 		Images: images,
+	})
+
+}
+
+type FlagData struct {
+	Id   int    `json:"id"`
+	Flag string `json:"flag"`
+}
+
+func (s *Server) handleFlag(c echo.Context) error {
+	var flagData FlagData
+
+	if err := c.Bind(&flagData); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid flag data")
+	}
+
+	query := s.db.Exec("INSERT INTO flags (block_id, flag) VALUES (?, ?)", flagData.Id, flagData.Flag)
+	if query.Error != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"id":   strconv.Itoa(flagData.Id),
+		"flag": flagData.Flag,
 	})
 
 }

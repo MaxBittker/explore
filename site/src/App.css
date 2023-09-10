@@ -1,9 +1,28 @@
+* {
+     box-sizing: border-box;
+     margin: 0;
+     padding: 0;
+}
+
+svg {
+     display: block;
+}
+
 body {
      margin: 0;
      overflow-x: hidden;
-     color: rgb(88, 88, 88)
-          /* background-color:#6695e1;
-     */
+     color: rgb(88, 88, 88);
+     font-size: 14px;
+
+     font-family: Arial, Helvetica, sans-serif;
+     width: 100vw;
+     height: 100vh;
+     display: flex;
+     align-items: flex-start;
+     justify-content: center;
+     -webkit-font-smoothing: antialiased;
+     -moz-osx-font-smoothing: grayscale;
+
 }
 
 .button-row {
@@ -59,39 +78,10 @@ button img {
 
 }
 
-
-
-.close {
+.flag-thanks {
      position: absolute;
-     top: -1px;
-     right: -1px;
-     padding: 3px;
-     margin: 0px
-}
-
-.info {
-     position: relative;
-     z-index: 6;
-     max-width: 400px;
-     background-color: rgb(239, 239, 239);
-     margin: 4px;
-     padding-top: 20px;
-     border-radius: 4px;
-     border-style: solid;
-     border-width: 1px;
-     padding: 6px;
-     font-size: 12px;
-     box-sizing: border-box;
-     font-family: Arial, Helvetica, sans-serif;
-     display: flex;
-     flex-direction: column;
-     justify-content: space-between;
-     line-height: 1.5em;
-}
-
-#atn {
-     margin: -6px;
-     margin-right: 0;
+     background: white;
+     z-index: 5;
 }
 
 .img-container {
@@ -136,13 +126,6 @@ img {
 }
 
 
-
-.gallery {
-     display: flex;
-     flex-wrap: wrap;
-     justify-content: center;
-}
-
 body::-webkit-scrollbar {
      display: none;
 }
@@ -153,9 +136,4 @@ body {
      /* IE and Edge */
      scrollbar-width: none;
      /* Firefox */
-}
-
-.bottom {
-     display: flex;
-     justify-content: center;
 }

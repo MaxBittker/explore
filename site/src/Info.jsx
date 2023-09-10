@@ -6,6 +6,7 @@ import home from '../public/info.svg';
 import x from '../public/x.svg';
 import attention from '../public/attention.gif';
 import { ArrowTopRightIcon } from "@radix-ui/react-icons";
+import "./info.css"
 
 export default function Info({ style, setInfoOpen, infoOpen }) {
   const [play] = useSound(click, { volume: 0.1 });
@@ -48,8 +49,9 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           Clear your mind and surf laterally though image space.
           <br />
           <br />
-          Images curated by <a href="https://are.na">Are.na</a> community.
-          Click  <ArrowTopRightIcon /> on the top right of any image to view it on Are.na.
+          Images are curated by <a href="https://are.na">Are.na</a> members.
+          <br />
+          If something is cool, right click it to find what Are.na channels it lives on.
           <br />
           <br />
         </span>

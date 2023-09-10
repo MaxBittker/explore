@@ -26,3 +26,9 @@ CREATE TABLE IF NOT EXISTS connections (
     channel_id INTEGER REFERENCES channels(id),
     UNIQUE (block_id, channel_id)
 );
+
+CREATE TABLE IF NOT EXISTS flags (
+    id SERIAL PRIMARY KEY,
+    block_id INTEGER REFERENCES blocks(id),
+    flag text
+);

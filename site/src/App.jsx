@@ -1,4 +1,6 @@
 import "./App.css";
+import './menuStyles.css';
+
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import VisibilitySensor from "react-visibility-sensor";
@@ -10,6 +12,7 @@ import Info from "./Info";
 import Block from "./Block";
 import block from "../public/blockshort.wav";
 import useGetData from "./getData";
+
 window.count = 10;
 export default function App() {
   // fetch data from api
