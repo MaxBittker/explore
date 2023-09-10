@@ -20,6 +20,7 @@ export default function useGetData(id, colCount) {
 
     useEffect(() => {
         setLoading(true);
+
         let multiplier = id ? 8 : 4;
         let computedOffset = offset - offsetOffset;
         if (computedOffset < 0) {
@@ -40,8 +41,15 @@ export default function useGetData(id, colCount) {
 
                 if (!newImages || newImages.length == 0) {
                     console.log("END!")
-                    setWanderId(images[images.length - 1].Id)
-                    setOffsetOffset(offset)
+                    if (id) {
+                        setWanderId(images[images.length - 1].Id)
+                        setOffsetOffset(offset)
+                    } else {
+                        // hack to request more
+                        setOffset(offset + 1)
+                        setOffsetOffset(offset + 1)
+                    }
+
                     return
                 }
 
@@ -89,7 +97,7 @@ export default function useGetData(id, colCount) {
         setFreshImages([])
         setColumns(newColumns)
 
-    }, [freshImages, columns, offset, colCount, lastItem])
+    }, [id, freshImages, columns, offset, colCount, lastItem])
 
     let reset = useCallback(() => {
         setOffset(0)
