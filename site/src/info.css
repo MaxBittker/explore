@@ -9,28 +9,55 @@
 .info {
     position: relative;
     z-index: 6;
-    max-width: 420px;
     background-color: rgb(239, 239, 239);
     margin: 4px;
     padding-top: 20px;
     border-radius: 4px;
     border-style: solid;
     border-width: 1px;
-    padding: 14px;
+    padding: 15px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     line-height: 1.5em;
     font-size: 1em;
+    user-select: none;
+
+}
+
+h3 {
+    margin: 0;
+    margin-top: -4px;
+    font-weight: 300;
+    /* color: #094296; */
 }
 
 #atn {
-    margin: -6px;
-    margin-right: 0;
+    margin: -3px;
+    margin-left: 0;
 }
 
 .small {
     font-size: 0.8em;
     line-height: 1.25em;
+}
+
+.info li {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    align-content: center;
+    /* justify-content: center; */
+    /* margin-left: -1.5em; */
+    /* margin-bottom: 0.5em; */
+}
+
+.info li input {
+    margin-right: .5em;
+}
+
+.info ul {
+    column-count: 2;
 }

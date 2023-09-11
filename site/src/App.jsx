@@ -6,12 +6,12 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import VisibilitySensor from "react-visibility-sensor";
 import { useWindowSize, useLocalStorage } from "usehooks-ts";
 import useSound from "use-sound";
-import spiral from "../public/spiral.svg";
-import back from "../public/back.svg";
 import Info from "./Info";
 import Block from "./Block";
 import block from "../public/blockshort.wav";
 import useGetData from "./getData";
+import { ReactComponent as Back } from "../public/back.svg";
+import { ReactComponent as Home } from "../public/home.svg";
 
 window.count = 10;
 export default function App() {
@@ -41,7 +41,7 @@ export default function App() {
             navigate(-1)
           }}
         >
-          <img width={24} src={back} title="back" />
+          <Back width={24} height={24} title="back" fill="rgb(88, 88, 88)" stroke="rgb(88, 88, 88)" />
         </button>
         <button
           onClick={() => {
@@ -50,7 +50,7 @@ export default function App() {
             setSearchParams({});
           }}
         >
-          <img width={24} src={spiral} title="random images" />
+          <Home width={24} height={24} title="home" fill="rgb(88, 88, 88)" stroke="rgb(88, 88, 88)" />
         </button>
       </div>
       <div className="button-row right">

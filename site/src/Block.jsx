@@ -1,7 +1,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowTopRightIcon, ExclamationTriangleIcon, LayersIcon, MinusCircledIcon, StarIcon, Link2Icon } from "@radix-ui/react-icons";
+import { ArrowTopRightIcon, ExclamationTriangleIcon, CopyIcon, MinusCircledIcon, StarIcon, Link2Icon } from "@radix-ui/react-icons";
 import copy from 'clipboard-copy'
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ReactComponent as ArenaLogo } from "../public/arena.svg";
@@ -124,7 +124,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                                 </ContextMenu.Item>
 
                                 <ContextMenu.Item className="ContextMenuItem Secondary" onSelect={() => flag(item.Id, "duplicate")} >
-                                    Flag Duplicate <div className="RightSlot"><LayersIcon /></div>
+                                    Flag Duplicate <div className="RightSlot"><CopyIcon /></div>
                                 </ContextMenu.Item>
                                 <ContextMenu.Item className="ContextMenuItem Secondary" onSelect={() => flag(item.Id, "boring")} >
                                     Flag Boring <div className="RightSlot"><MinusCircledIcon /></div>

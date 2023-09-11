@@ -9,12 +9,10 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"math"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -31,6 +29,7 @@ import (
 
 	// . "github.com/whyrusleeping/algoz/models"
 	"golang.org/x/crypto/acme/autocert"
+	"golang.org/x/exp/slices"
 	"gonum.org/v1/gonum/floats"
 
 	cli "github.com/urfave/cli/v2"
@@ -53,11 +52,11 @@ func main() {
 }
 
 type imageMeta struct {
-	Id       int
-	Width    int
-	Height   int
-	Thumb    string
-	Distance float64
+	Id     int
+	Width  int
+	Height int
+	Thumb  string
+	Phash  int64
 }
 type Server struct {
 	db           *gorm.DB
@@ -130,19 +129,23 @@ var runCmd = &cli.Command{
 			if query.Get("id") != "" {
 				id := query.Get("id")
 				var image *imageMeta
-				db.Raw(fmt.Sprintf(`
-				SELECT blocks.display as Thumb
-				FROM blocks
-				WHERE id = %s
-				LIMIT 1
-				`, id)).Scan(&image)
+
+				// Parameterized query to prevent SQL injection
+				err := db.Raw(`SELECT blocks.display as Thumb FROM blocks WHERE id = ? LIMIT 1`, id).Scan(&image).Error
+
+				if err != nil {
+					ogImage = "https://river.maxbittker.com/river_og.png"
+				}
+
 				ogImage = image.Thumb
 			} else {
-				ogImage = "default_og_image.jpg"
+				ogImage = "https://river.maxbittker.com/river_og.png"
 			}
+
 			data := &PageData{
 				OgImage: ogImage,
 			}
+
 			return c.Render(http.StatusOK, "index.html", data)
 		})
 
@@ -188,14 +191,16 @@ var runCmd = &cli.Command{
 		err = s.db.Debug().Raw(
 			fmt.Sprintf(
 				`
-				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height
+				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height 
 				FROM blocks
 				WHERE blocks.thumb IS NOT NULL
 				and blocks.embedding is not null
 				and nsfw is not true
-				ORDER BY random()
+				and blocks.id in (
+					select max(block_id) from clusters group by cluster_id
+				)
 				LIMIT %d
-			`, 1500)).Scan(&s.cachedRandom).Error
+			`, 500)).Scan(&s.cachedRandom).Error
 
 		if err != nil {
 			log.Error(err)
@@ -230,71 +235,62 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 	var images []imageMeta
 
 	s.db.Exec("SET hnsw.ef_search = 100;")
-	if blockId == "" || blockId == "null" || blockId == "undefined" {
+	if blockId == "audit" {
+		shouldReturn, returnValue := audit(s, limit, offset, &images)
+		if shouldReturn {
+			return returnValue
+		}
+	} else {
 
-		// select 45 random items from cachedRandom
-		// images = make([]imageMeta, limit)
-		// for i := 0; i < limit; i++ {
-		// convert int to string:
-		blockId = strconv.Itoa(s.cachedRandom[rand.Intn(len(s.cachedRandom))].Id)
-		// }
+		if blockId == "" || blockId == "null" || blockId == "undefined" {
+			blockId = strconv.Itoa(s.cachedRandom[rand.Intn(len(s.cachedRandom))].Id)
+			offset = 0
+		}
 
-	}
-
-	err = s.db.Debug().Raw(
-		fmt.Sprintf(
+		err = s.db.Debug().Raw(
 			`
-			SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.embedding <#> 
-			(SELECT embedding FROM blocks WHERE id = %s) as Distance
+			SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
 			FROM blocks
 			WHERE blocks.thumb IS NOT NULL
 			and blocks.embedding is not null
 			and nsfw is not true
 			ORDER BY blocks.embedding <#> 
-				(SELECT embedding FROM blocks WHERE id = %s)
-			LIMIT %d
-			OFFSET %d
+				(SELECT embedding FROM blocks WHERE id = ?)
+			LIMIT ?
+			OFFSET ?
 		
-		`, blockId, blockId, limit, offset)).Scan(&images).Error
-	if err != nil {
-		log.Error(err)
-		return &echo.HTTPError{
-			Code:    500,
-			Message: fmt.Sprintf("neighbors failed: %s", err),
+		`, blockId, limit, offset).Scan(&images).Error
+		if err != nil {
+			log.Error(err)
+			return &echo.HTTPError{
+				Code:    500,
+				Message: fmt.Sprintf("neighbors failed: %s", err),
+			}
 		}
-	}
 
-	if offset == 0 {
-		go func(blockId string) {
-			s.db.Exec(fmt.Sprintf("UPDATE blocks SET votes = votes + 1 where id = %s", blockId))
-		}(blockId)
-	}
-
-	// remove images with too similar values for distance
-	var filteredImages []imageMeta
-	var lastDistance = 10.0
-	var sortedDeltas = []float64{}
-
-	for _, img := range images {
-		delta := math.Abs(img.Distance - lastDistance)
-		lastDistance = img.Distance
-		sortedDeltas = append(sortedDeltas, delta)
-	}
-	sort.Float64s(sortedDeltas)
-	threshholdI := int(float64(limit) * .15)
-	threshholdI = Min(threshholdI, len(images)-1)
-	// sortDelta:
-	for _, img := range images {
-		delta := math.Abs(img.Distance - lastDistance)
-		if delta > sortedDeltas[threshholdI] || threshholdI == 0 {
-			// insert delta to sorted deltas:
-			filteredImages = append(filteredImages, img)
-		} else {
-			threshholdI--
+		if offset == 0 {
+			go func(blockId string) {
+				s.db.Exec("UPDATE blocks SET votes = votes + 1 where id = ?", blockId)
+			}(blockId)
 		}
-	}
-	if len(filteredImages) > 0 {
-		images = filteredImages
+
+		// remove images with too similar values for distance
+		var filteredImages []imageMeta
+		var seenPhashes []int64
+
+		// sortDelta:
+		for _, img := range images {
+			// check if phash occurs in seenPhashes:
+			if img.Phash == 0 || !slices.Contains(seenPhashes, img.Phash) {
+				seenPhashes = append(seenPhashes, img.Phash)
+				filteredImages = append(filteredImages, img)
+			}
+
+		}
+
+		if len(filteredImages) > 0 {
+			images = filteredImages
+		}
 	}
 
 	type neighborsResults struct {
@@ -305,6 +301,32 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 		Images: images,
 	})
 
+}
+
+func audit(s *Server, limit int, offset int, images *[]imageMeta) (bool, error) {
+	err := s.db.Debug().Raw(
+		fmt.Sprintf(
+			`
+			SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height 
+			FROM blocks
+			WHERE blocks.thumb IS NOT NULL
+			and blocks.embedding is not null
+			and nsfw is not true
+			and blocks.id in (
+				select max(block_id) from clusters group by cluster_id
+			)
+			LIMIT %d
+			OFFSET %d
+		
+		`, limit, offset)).Scan(&images).Error
+	if err != nil {
+		log.Error(err)
+		return true, &echo.HTTPError{
+			Code:    500,
+			Message: fmt.Sprintf("audit failed: %s", err),
+		}
+	}
+	return false, nil
 }
 
 type FlagData struct {
@@ -364,8 +386,7 @@ func (s *Server) projectAllEmbeddings(ctx context.Context) error {
 		and blocks.phash is null
 		and blocks.gif is not true
 		and blocks.embedding is not null
-		order by votes desc
-		LIMIT 20
+		LIMIT 30
 		`).Scan(&images)
 
 		// sum := mat.NewVecDense(512, nil)
