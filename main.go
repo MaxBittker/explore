@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"html/template"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"math"
 	"math/rand"
@@ -12,8 +17,12 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
+
+	gif "github.com/NathanBaulch/gifx"
 
 	cliutil "github.com/bluesky-social/indigo/util/cliutil"
+	"github.com/corona10/goimagehash"
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	logging "github.com/ipfs/go-log"
@@ -171,14 +180,10 @@ var runCmd = &cli.Command{
 			}
 		}()
 
-		if cctx.Bool("feed-test") {
-			go func() {
-				// s.pollAllImagePaths(context.Background())
-				// s.projectAllEmbeddings(context.Background())
-			}()
-			// block and don't index firehose
-			select {}
-		}
+		go func() {
+			// s.pollAllImagePaths(context.Background())
+			s.projectAllEmbeddings(context.Background())
+		}()
 
 		err = s.db.Debug().Raw(
 			fmt.Sprintf(
@@ -343,4 +348,81 @@ func Min(x, y int) int {
 		return y
 	}
 	return x
+}
+
+func (s *Server) projectAllEmbeddings(ctx context.Context) error {
+	c := time.Tick(100 * time.Millisecond)
+	// log.Error(v1.Dims())
+	for range c {
+
+		var images []imageMeta
+
+		s.db.Raw(`
+		SELECT blocks.thumb as Thumb, blocks.id as Id
+		FROM blocks
+		WHERE blocks.nsfw is not true
+		and blocks.phash is null
+		and blocks.gif is not true
+		and blocks.embedding is not null
+		order by votes desc
+		LIMIT 20
+		`).Scan(&images)
+
+		// sum := mat.NewVecDense(512, nil)
+		var wg sync.WaitGroup
+
+		for _, img := range images {
+			wg.Add(1)
+			go func(imgMeta imageMeta) {
+				defer wg.Done()
+
+				file, err := http.Get(imgMeta.Thumb)
+				if err != nil {
+					log.Error(err)
+					return
+				}
+				defer file.Body.Close()
+
+				var img image.Image
+				var err2 error
+				// log.Error(file.Header.Get("Content-Type"))
+				if file.Header.Get("Content-Type") == "image/gif" {
+					img, err2 = decodeFirstFrame(file)
+					s.db.Exec(fmt.Sprintf("UPDATE blocks SET gif = true where id = %d", imgMeta.Id))
+					if err2 != nil {
+						log.Error(err2)
+
+						return
+					}
+				} else {
+					img, _, err2 = image.Decode(file.Body)
+					if err2 != nil {
+						log.Error(err2)
+						return
+					}
+				}
+
+				hash, err := goimagehash.PerceptionHash(img)
+				if err != nil {
+					log.Error(err)
+					return
+				}
+				log.Error(hash.GetHash())
+				s.db.Exec(fmt.Sprintf("UPDATE blocks SET phash = %d where id = %d", int64(hash.GetHash()), imgMeta.Id))
+			}(img)
+		}
+
+		wg.Wait() // Wait for all goroutines to finish.
+	}
+	return nil
+}
+
+func decodeFirstFrame(file *http.Response) (image.Image, error) {
+	gifImg, err := gif.Decode(file.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// gifImg.Image[0] is the first frame
+	return gifImg, nil
 }

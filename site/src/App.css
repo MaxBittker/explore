@@ -31,8 +31,12 @@ body {
      top: 0px;
 }
 
+.button-row.left {
+     left: 0px;
+}
+
 .button-row.right {
-     right: 5px
+     right: 3px
 }
 
 button {

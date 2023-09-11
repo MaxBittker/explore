@@ -18,7 +18,7 @@ export default function App() {
   // fetch data from api
   let { width, height } = useWindowSize();
   width = width || window.innerWidth
-  const [infoOpen, setInfoOpen] = useLocalStorage(true);
+  const [infoOpen, setInfoOpen] = useLocalStorage('infoOpen', true);
   const [searchParams, setSearchParams] = useSearchParams();
   const id = searchParams.get("id");
   const navigate = useNavigate();
@@ -33,7 +33,7 @@ export default function App() {
   let cWidth = width / colCount;
   return (
     <main>
-      <div className="button-row">
+      <div className="button-row left">
         <button
           onClick={() => {
             reset();
@@ -41,7 +41,7 @@ export default function App() {
             navigate(-1)
           }}
         >
-          <img src={back} title="back" />
+          <img width={24} src={back} title="back" />
         </button>
         <button
           onClick={() => {
@@ -50,7 +50,7 @@ export default function App() {
             setSearchParams({});
           }}
         >
-          <img src={spiral} title="spiral" />
+          <img width={24} src={spiral} title="random images" />
         </button>
       </div>
       <div className="button-row right">

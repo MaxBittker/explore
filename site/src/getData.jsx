@@ -20,12 +20,8 @@ export default function useGetData(id, colCount) {
 
     useEffect(() => {
         setLoading(true);
-
         let multiplier = id ? 8 : 4;
-        let computedOffset = offset - offsetOffset;
-        if (computedOffset < 0) {
-            return
-        }
+        let computedOffset = Math.max(offset - offsetOffset, 0);
         let url = "https://river.maxbittker.com/neighbors?" +
             new URLSearchParams({
                 id: wanderId || id,
@@ -113,11 +109,14 @@ export default function useGetData(id, colCount) {
 
 
 function collateListBalanced(newItems, columns, oldColumns) {
+    let skipList = {};
+
     let heights = Array(columns).fill(0);
     if (oldColumns) {
         heights = heights.map(
             (h, i) =>
                 oldColumns[i]?.reduce((a, b) => {
+                    skipList[b.Id] = true;
                     return a + b?.Height / b?.Width;
                 }, 0) ?? 0,
         );
@@ -129,7 +128,7 @@ function collateListBalanced(newItems, columns, oldColumns) {
             result[i] = list;
         });
     }
-    let list = newItems;
+    let list = newItems.filter((item) => !skipList[item.Id]);
     let i = 0;
     while (i < list.length) {
         let item = list[i];

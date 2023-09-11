@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS blocks (
     width INTEGER,
     height INTEGER,
     votes INTEGER DEFAULT 0,
+    phash BIGINT DEFAULT null,
     nsfw BOOLEAN DEFAULT null,
+    gif BOOLEAN DEFAULT null,
     embedding vector(512)
 );
 

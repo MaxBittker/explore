@@ -99,7 +99,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                         window.open(url, "_blank").focus();
                     }}
                         className="ContextMenuItem">
-                        Surf in new tab <div className="RightSlot">  <ArrowTopRightIcon /></div>
+                        Open in new tab <div className="RightSlot">  <ArrowTopRightIcon /></div>
                     </ContextMenu.Item>
 
                     <ContextMenu.Separator className="ContextMenuSeparator" />
