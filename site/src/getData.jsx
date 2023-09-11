@@ -20,7 +20,8 @@ export default function useGetData(id, colCount) {
 
     useEffect(() => {
         setLoading(true);
-        let multiplier = id ? 8 : 4;
+        let multiplier = id ? 8 : 2;
+        console.log("offset", offset, offsetOffset)
         let computedOffset = Math.max(offset - offsetOffset, 0);
         let url = "https://river.maxbittker.com/neighbors?" +
             new URLSearchParams({
@@ -43,7 +44,7 @@ export default function useGetData(id, colCount) {
                     } else {
                         // hack to request more
                         setOffset(offset + 1)
-                        setOffsetOffset(offset + 1)
+                        // setOffsetOffset(offset + 1)
                     }
 
                     return
@@ -125,6 +126,7 @@ function collateListBalanced(newItems, columns, oldColumns) {
     let result = Array.from({ length: columns }, () => []);
     if (oldColumns) {
         oldColumns.forEach((list, i) => {
+            if (i >= columns) return
             result[i] = list;
         });
     }

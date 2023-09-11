@@ -52,7 +52,7 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           May contain NSFW content.
           <br />
           <br />
-          <b>Right click any image to open on <a href="https://are.na?utm_source=river.maxbittker.com">Are.na</a>, for full size version and human-curated connections.</b>
+          <b>Right click any image to open on <a href="https://are.na?utm_source=river.maxbittker.com">Are.na</a>, for source, full res, and human-curated connections.</b>
           <br />
           <br />
           Consider connecting your finds to my public channel, <a href="https://www.are.na/max-bittker/found-in-the-river">found in the river</a>.

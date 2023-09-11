@@ -3,23 +3,23 @@ module github.com/whyrusleeping/algoz
 go 1.20
 
 require (
+	github.com/NathanBaulch/gifx v0.0.0-20220621110330-1fbd2e6a83a4
 	github.com/bluesky-social/indigo v0.0.0-20230828224954-ebc21133a67a
+	github.com/corona10/goimagehash v1.1.0
 	github.com/getsentry/sentry-go v0.23.0
 	github.com/ipfs/go-log v1.0.5
 	github.com/labstack/echo/v4 v4.10.2
-	github.com/pgvector/pgvector-go v0.1.1
 	github.com/urfave/cli/v2 v2.25.3
 	golang.org/x/crypto v0.12.0
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	gonum.org/v1/gonum v0.14.0
 	gorm.io/gorm v1.25.1
 )
 
 require (
-	github.com/NathanBaulch/gifx v0.0.0-20220621110330-1fbd2e6a83a4 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/corona10/goimagehash v1.1.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect

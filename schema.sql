@@ -34,3 +34,9 @@ CREATE TABLE IF NOT EXISTS flags (
     block_id INTEGER REFERENCES blocks(id),
     flag text
 );
+
+CREATE TABLE IF NOT EXISTS clusters (
+    id SERIAL PRIMARY KEY,
+    cluster_id INTEGER,
+    block_id INTEGER REFERENCES blocks(id)
+);
