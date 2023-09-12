@@ -15,7 +15,7 @@ function flagBlock(id) {
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ id, flag }),
+            body: JSON.stringify({ id, flag, pw: localStorage.getItem("pw") }),
         }).then((res) => res.json())
             .then((res) => {
                 setFlaggedAs(res?.flag)
@@ -27,7 +27,7 @@ function flagBlock(id) {
 
     return [flaggedAs, flag]
 }
-export default function Block({ item, i, index, cWidth, reset, setLastItem, play, setSearchParams }) {
+export default function Block({ item, i, index, cWidth, reset, setLastItem, play }) {
 
 
     let aspectRatio = item.Width / item.Height;
@@ -44,6 +44,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                     className={"img-container"}
                     onClick={(e) => {
                         // e.preventDefault();
+                        if (e.ctrlKey || e.metaKey) return
                         reset(0);
                         setLastItem({ ...item, x: index, y: i });
                         // setSearchParams({

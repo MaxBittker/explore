@@ -13,18 +13,18 @@ import "./info.css"
 let challengeItems = [
   "Earth",
   "Death Metal Lettering",
-  "Old computer",
+  "Old Computer",
   "Something on Fire",
   "Galaxy / Nebula",
   "Pokemon/Yu-Gi-Oh/Magic",
-  "Golden Apple",
+  "Stained Glass Window",
   "Quilt",
   "Ancient Ceramics",
   "Complicated Diagram",
   "Obama Eating Ice Cream",
   "Crystal",
   "Fungus",
-  "Jellyfish",
+  "Salamander",
   "Porcelain",
   "Four Leaf Clover",
   "Half Moon",
@@ -88,41 +88,38 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           <br /> */}
 
         </span>
-        <details>
-          <summary>Scavenger Hunt:</summary>
-          <ul>
-            {challengeItems.filter((item) => {
-              if (w < 410) {
-                return item.length < 19
-              } return true
-            }).map((item, i) => {
-              let seen = seenItems.includes(item)
-              return (<li
-                key={item}
-                style={{ textDecoration: seen ? 'line-through' : 'none' }}
-                onClick={() => {
-                  if (seen) {
-                    let newV = seenItems.filter((v) => v !== item)
-                    setSeenItems([...newV])
-                  } else {
-                    setSeenItems([...seenItems, item])
+        {/* <details> */}
+        <summary>Optional Challenge, find these items: </summary>
+        <ul>
+          {challengeItems.filter((item) => {
+            if (w < 410) {
+              return item.length < 19
+            } return true
+          }).map((item, i) => {
+            let seen = seenItems.includes(item)
+            return (<li
+              key={item}
+              style={{ textDecoration: seen ? 'line-through' : 'none' }}
+              onClick={() => {
+                if (seen) {
+                  let newV = seenItems.filter((v) => v !== item)
+                  setSeenItems([...newV])
+                } else {
+                  setSeenItems([...seenItems, item])
 
-                  }
-                }}><input type='checkbox' checked={seen}></input>{item}</li>
-              )
-            })
-            }
-          </ul>
-        </details>
+                }
+              }}><input type='checkbox' readOnly checked={seen}></input>{item}</li>
+            )
+          })
+          }
+        </ul>
+        {/* </details> */}
         <br />
         <span className='small'>
-          Powered by CLIP & pgvector, on a small VPS
+          Built by <a href="https://maxbittker.com">Max Bittker</a>, September 2023, powered by CLIP & pgvector
         </span>
         <span className='small'>
-          Built by <a href="https://maxbittker.com">Max Bittker</a>, September 2023
-        </span>
-        <span className='small'>
-          Available for consulting & collaborations this fall/winter
+          Available for consulting & collaborations this fall/winter,  <a href="mailto:maxbittker@gmail.com">contact</a>
         </span>
 
       </div>

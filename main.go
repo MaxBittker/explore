@@ -9,7 +9,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,12 +55,11 @@ type imageMeta struct {
 	Width  int
 	Height int
 	Thumb  string
-	Phash  int64
+	Phash  int64 `json:"phash,omitempty"`
 }
 type Server struct {
 	db           *gorm.DB
 	cachedRandom []imageMeta
-	userLk       sync.Mutex
 }
 
 type Template struct {
@@ -128,16 +126,24 @@ var runCmd = &cli.Command{
 			query := c.Request().URL.Query()
 			if query.Get("id") != "" {
 				id := query.Get("id")
-				var image *imageMeta
 
-				// Parameterized query to prevent SQL injection
-				err := db.Raw(`SELECT blocks.display as Thumb FROM blocks WHERE id = ? LIMIT 1`, id).Scan(&image).Error
-
+				// parse id to number:
+				idInt, err := strconv.Atoi(id)
 				if err != nil {
 					ogImage = "https://river.maxbittker.com/river_og.png"
+				} else {
+					var image *imageMeta
+
+					// Parameterized query to prevent SQL injection
+					err := db.Raw(`SELECT blocks.display as Thumb FROM blocks WHERE id = ? LIMIT 1`, idInt).Scan(&image).Error
+
+					if err != nil {
+						ogImage = "https://river.maxbittker.com/river_og.png"
+					}
+
+					ogImage = image.Thumb
 				}
 
-				ogImage = image.Thumb
 			} else {
 				ogImage = "https://river.maxbittker.com/river_og.png"
 			}
@@ -185,7 +191,7 @@ var runCmd = &cli.Command{
 
 		go func() {
 			// s.pollAllImagePaths(context.Background())
-			s.projectAllEmbeddings(context.Background())
+			// s.projectAllEmbeddings(context.Background())
 		}()
 
 		err = s.db.Debug().Raw(
@@ -193,12 +199,14 @@ var runCmd = &cli.Command{
 				`
 				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height 
 				FROM blocks
+				join clusters on blocks.id = clusters.block_id
 				WHERE blocks.thumb IS NOT NULL
 				and blocks.embedding is not null
 				and nsfw is not true
 				and blocks.id in (
 					select max(block_id) from clusters group by cluster_id
 				)
+				order by clusters.id desc
 				LIMIT %d
 			`, 500)).Scan(&s.cachedRandom).Error
 
@@ -234,32 +242,69 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 
 	var images []imageMeta
 
-	s.db.Exec("SET hnsw.ef_search = 100;")
+	s.db.Exec("SET hnsw.ef_search = 70;")
 	if blockId == "audit" {
 		shouldReturn, returnValue := audit(s, limit, offset, &images)
 		if shouldReturn {
 			return returnValue
 		}
-	} else {
-
-		if blockId == "" || blockId == "null" || blockId == "undefined" {
-			blockId = strconv.Itoa(s.cachedRandom[rand.Intn(len(s.cachedRandom))].Id)
-			offset = 0
+		type neighborsResults struct {
+			Images []imageMeta `json:"images"`
 		}
+
+		return e.JSON(200, neighborsResults{
+			Images: images,
+		})
+
+	}
+
+	if blockId == "" || blockId == "null" || blockId == "undefined" {
+
+		var images2 []imageMeta
+
+		for i := 0; i < 3; i++ {
+			blockId = strconv.Itoa(s.cachedRandom[((offset*3)+i)%len(s.cachedRandom)].Id)
+			// log.Error(offset, (offset*3)+i)
+			miniOffset := int(10 * int(offset/len(s.cachedRandom)))
+			miniLimit := int(limit / 3)
+			err = s.db.Debug().Raw(
+				`
+				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
+				FROM blocks
+				WHERE blocks.thumb IS NOT NULL
+				and blocks.embedding is not null
+				and nsfw is not true
+				ORDER BY blocks.embedding <#> 
+					(SELECT embedding FROM blocks WHERE id = ?)
+				LIMIT ?
+				OFFSET ?
+			
+			`, blockId, miniLimit, miniOffset).Scan(&images2).Error
+			if err != nil {
+				log.Error(err)
+				return &echo.HTTPError{
+					Code:    500,
+					Message: fmt.Sprintf("neighbors failed: %s", err),
+				}
+			}
+			images = append(images, images2...)
+		}
+
+	} else {
 
 		err = s.db.Debug().Raw(
 			`
-			SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
-			FROM blocks
-			WHERE blocks.thumb IS NOT NULL
-			and blocks.embedding is not null
-			and nsfw is not true
-			ORDER BY blocks.embedding <#> 
-				(SELECT embedding FROM blocks WHERE id = ?)
-			LIMIT ?
-			OFFSET ?
-		
-		`, blockId, limit, offset).Scan(&images).Error
+		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
+		FROM blocks
+		WHERE blocks.thumb IS NOT NULL
+		and blocks.embedding is not null
+		and nsfw is not true
+		ORDER BY blocks.embedding <#> 
+			(SELECT embedding FROM blocks WHERE id = ?)
+		LIMIT ?
+		OFFSET ?
+	
+	`, blockId, limit, offset).Scan(&images).Error
 		if err != nil {
 			log.Error(err)
 			return &echo.HTTPError{
@@ -267,30 +312,30 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 				Message: fmt.Sprintf("neighbors failed: %s", err),
 			}
 		}
+	}
 
-		if offset == 0 {
-			go func(blockId string) {
-				s.db.Exec("UPDATE blocks SET votes = votes + 1 where id = ?", blockId)
-			}(blockId)
+	// if offset == 0 {
+	// 	go func(blockId string) {
+	// 		s.db.Exec("UPDATE blocks SET votes = votes + 1 where id = ?", blockId)
+	// 	}(blockId)
+	// }
+
+	// remove images with too similar values for distance
+	var filteredImages []imageMeta
+	var seenPhashes []int64
+
+	// sortDelta:
+	for _, img := range images {
+		// check if phash occurs in seenPhashes:
+		if img.Phash == 0 || !slices.Contains(seenPhashes, img.Phash) {
+			seenPhashes = append(seenPhashes, img.Phash)
+			filteredImages = append(filteredImages, img)
 		}
 
-		// remove images with too similar values for distance
-		var filteredImages []imageMeta
-		var seenPhashes []int64
+	}
 
-		// sortDelta:
-		for _, img := range images {
-			// check if phash occurs in seenPhashes:
-			if img.Phash == 0 || !slices.Contains(seenPhashes, img.Phash) {
-				seenPhashes = append(seenPhashes, img.Phash)
-				filteredImages = append(filteredImages, img)
-			}
-
-		}
-
-		if len(filteredImages) > 0 {
-			images = filteredImages
-		}
+	if len(filteredImages) > 0 {
+		images = filteredImages
 	}
 
 	type neighborsResults struct {
@@ -332,15 +377,62 @@ func audit(s *Server, limit int, offset int, images *[]imageMeta) (bool, error) 
 type FlagData struct {
 	Id   int    `json:"id"`
 	Flag string `json:"flag"`
+	Pw   string `json:"pw"`
 }
 
 func (s *Server) handleFlag(c echo.Context) error {
 	var flagData FlagData
 
+	var password = os.Getenv("FLAG_PASSWORD")
+
 	if err := c.Bind(&flagData); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid flag data")
 	}
+	if flagData.Pw == password {
+		if flagData.Flag == "boring" {
+			query2 := s.db.Debug().Exec("delete from clusters where cluster_id in (select cluster_id from clusters where block_id = ?)", flagData.Id)
+			if query2.Error != nil {
+				log.Error(query2.Error)
 
+				return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
+			}
+		}
+		if flagData.Flag == "nsfw" {
+			s.db.Debug().Exec(fmt.Sprintf("UPDATE blocks SET nsfw = true where id = %d", flagData.Id))
+		}
+		if flagData.Flag == "cool" {
+			query2 := s.db.Debug().Exec(`
+			INSERT INTO clusters (cluster_id, block_id)
+			SELECT 
+			   COALESCE((SELECT MAX(cluster_id) FROM clusters), 0) + 1, 
+			   ?
+			`, flagData.Id)
+			if query2.Error != nil {
+				log.Error(query2.Error)
+				return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
+			}
+		}
+		err := s.db.Debug().Raw(
+			fmt.Sprintf(
+				`
+				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height 
+				FROM blocks
+				join clusters on blocks.id = clusters.block_id
+				WHERE blocks.thumb IS NOT NULL
+				and blocks.embedding is not null
+				and nsfw is not true
+				and blocks.id in (
+					select max(block_id) from clusters group by cluster_id
+				)
+				order by clusters.id desc
+				LIMIT %d
+			`, 500)).Scan(&s.cachedRandom).Error
+
+		if err != nil {
+			log.Error(err)
+		}
+
+	}
 	query := s.db.Exec("INSERT INTO flags (block_id, flag) VALUES (?, ?)", flagData.Id, flagData.Flag)
 	if query.Error != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
@@ -428,7 +520,7 @@ func (s *Server) projectAllEmbeddings(ctx context.Context) error {
 					log.Error(err)
 					return
 				}
-				log.Error(hash.GetHash())
+				// log.Error(hash.GetHash())
 				s.db.Exec(fmt.Sprintf("UPDATE blocks SET phash = %d where id = %d", int64(hash.GetHash()), imgMeta.Id))
 			}(img)
 		}

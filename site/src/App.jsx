@@ -73,7 +73,6 @@ export default function App() {
                 cWidth={cWidth}
                 setLastItem={setLastItem}
                 reset={reset}
-                setSearchParams={setSearchParams}
                 play={play} />)}
               <VisibilitySensor
                 onChange={(isVisible) => {

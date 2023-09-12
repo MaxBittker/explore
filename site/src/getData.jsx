@@ -12,6 +12,7 @@ export default function useGetData(id, colCount) {
     const [error, setError] = useState(null);
     const [wanderId, setWanderId] = useState(null);
     const [offsetOffset, setOffsetOffset] = useState(0);
+    const [page, setPage] = useState(0);
     useEffect(() => {
         setWanderId(null)
         setOffsetOffset(0)
@@ -20,14 +21,18 @@ export default function useGetData(id, colCount) {
 
     useEffect(() => {
         setLoading(true);
-        let multiplier = id ? 8 : 2;
-        console.log("offset", offset, offsetOffset)
+        let multiplier = 6;
+        // console.log("offset", offset, offsetOffset)
         let computedOffset = Math.max(offset - offsetOffset, 0);
+        let computedLimit = multiplier * colCount;
+        if (!id) {
+            computedOffset = page;
+        }
         let url = "https://river.maxbittker.com/neighbors?" +
             new URLSearchParams({
                 id: wanderId || id,
-                limit: multiplier * colCount,
-                offset: computedOffset
+                limit: computedLimit,
+                offset: computedOffset,
             });
         // console.log(url)
         fetch(url)
@@ -43,14 +48,15 @@ export default function useGetData(id, colCount) {
                         setOffsetOffset(offset)
                     } else {
                         // hack to request more
-                        setOffset(offset + 1)
+                        setPage(page + 1)
                         // setOffsetOffset(offset + 1)
                     }
 
                     return
                 }
-
-                shuffleArray(newImages);
+                if (id) {
+                    shuffleArray(newImages);
+                }
                 window.count = 10;
 
                 setImages([...images, ...newImages]);
@@ -94,15 +100,17 @@ export default function useGetData(id, colCount) {
         setFreshImages([])
         setColumns(newColumns)
 
-    }, [id, freshImages, columns, offset, colCount, lastItem])
+    }, [id, freshImages, columns, offset, page, colCount, lastItem])
 
     let reset = useCallback(() => {
         setOffset(0)
+        setPage(0)
         setImages([])
     }, [setOffset]);
 
     let loadMore = useCallback(() => {
         setOffset(images.length)
+        setPage(page + 1)
     }, [setOffset, images]);
     return { columns, loading, error, setLastItem, reset, loadMore };
 }
