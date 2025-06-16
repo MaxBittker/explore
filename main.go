@@ -267,7 +267,7 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 			// log.Error(offset, (offset*3)+i)
 			miniOffset := int(10 * int(offset/len(s.cachedRandom)))
 			miniLimit := int(limit / 3)
-			err = s.db.Debug().Raw(
+			err = s.db.Raw(
 				`
 				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
 				FROM blocks
@@ -292,7 +292,7 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 
 	} else {
 
-		err = s.db.Debug().Raw(
+		err = s.db.Raw(
 			`
 		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
 		FROM blocks
