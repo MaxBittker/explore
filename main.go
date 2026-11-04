@@ -56,6 +56,8 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
+const defaultOgImage = "https://river.maxbittker.com/river_og.png"
+
 type PageData struct {
 	OgImage string
 }
@@ -105,37 +107,18 @@ var runCmd = &cli.Command{
 			templates: template.Must(template.ParseGlob("site/dist/*.html")),
 		}
 		e.GET("/", func(c echo.Context) error {
-			var ogImage string
-			query := c.Request().URL.Query()
-			if query.Get("id") != "" {
-				id := query.Get("id")
-
-				// parse id to number:
-				idInt, err := strconv.Atoi(id)
+			ogImage := defaultOgImage
+			if idInt, err := strconv.Atoi(c.QueryParam("id")); err == nil {
+				var display *string
+				err := db.Raw(`SELECT display FROM blocks WHERE id = ? LIMIT 1`, idInt).Scan(&display).Error
 				if err != nil {
-					ogImage = "https://river.maxbittker.com/river_og.png"
-				} else {
-					var image *imageMeta
-
-					// Parameterized query to prevent SQL injection
-					err := db.Raw(`SELECT blocks.display as Thumb FROM blocks WHERE id = ? LIMIT 1`, idInt).Scan(&image).Error
-
-					if err != nil {
-						ogImage = "https://river.maxbittker.com/river_og.png"
-					}
-
-					ogImage = image.Thumb
+					log.Error(err)
+				} else if display != nil && *display != "" {
+					ogImage = *display
 				}
-
-			} else {
-				ogImage = "https://river.maxbittker.com/river_og.png"
 			}
 
-			data := &PageData{
-				OgImage: ogImage,
-			}
-
-			return c.Render(http.StatusOK, "index.html", data)
+			return c.Render(http.StatusOK, "index.html", &PageData{OgImage: ogImage})
 		})
 
 		e.Use(sentryecho.New(sentryecho.Options{}))
