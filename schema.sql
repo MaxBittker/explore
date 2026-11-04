@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE IF NOT EXISTS blocks (
     id INTEGER PRIMARY KEY,
     title TEXT,
@@ -19,7 +21,8 @@ CREATE TABLE IF NOT EXISTS channels (
     slug TEXT,
     title TEXT,
     votes INTEGER DEFAULT 0,
-    nsfw BOOLEAN DEFAULT null scraped BOOLEAN DEFAULT FALSE
+    nsfw BOOLEAN DEFAULT null,
+    scraped BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS connections (
