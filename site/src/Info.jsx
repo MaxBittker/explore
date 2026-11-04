@@ -109,9 +109,6 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
         <span className='small'>
           Built by <a href="https://maxbittker.com">Max Bittker</a>, September 2023, powered by CLIP & pgvector
         </span>
-        <span className='small'>
-          Available for consulting & collaborations this fall/winter,  <a href="mailto:maxbittker@gmail.com">contact</a>
-        </span>
 
       </div>
     </Rnd>)
