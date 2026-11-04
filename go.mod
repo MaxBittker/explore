@@ -1,4 +1,4 @@
-module github.com/whyrusleeping/algoz
+module github.com/MaxBittker/explore
 
 go 1.20
 

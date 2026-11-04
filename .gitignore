@@ -8,4 +8,9 @@ classify/*.onnx
 # default sqlite path and go build output
 data/
 /algoz
+/explore
 .DS_Store
+
+# python
+__pycache__/
+*.pyc

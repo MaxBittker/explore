@@ -21,7 +21,7 @@ import (
 	gorm "gorm.io/gorm"
 )
 
-var log = logging.Logger("algoz")
+var log = logging.Logger("river")
 
 func main() {
 
