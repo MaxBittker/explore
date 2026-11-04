@@ -5,12 +5,13 @@ import { ArrowTopRightIcon, ExclamationTriangleIcon, CopyIcon, MinusCircledIcon,
 import copy from 'clipboard-copy'
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ReactComponent as ArenaLogo } from "../public/arena.svg";
+import { API_BASE, SITE_URL } from "./config";
 let last_hit = 0;
 
 function flagBlock(id) {
     let [flaggedAs, setFlaggedAs] = useState(undefined)
     let flag = useCallback((id, flag) => {
-        fetch("https://river.maxbittker.com/api/flag", {
+        fetch(API_BASE + "/api/flag", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -91,7 +92,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                     <ContextMenu.Separator className="ContextMenuSeparator" />
 
                     <ContextMenu.Item onSelect={() => {
-                        let url = "https://river.maxbittker.com/?id=" + item.Id;
+                        let url = SITE_URL + "/?id=" + item.Id;
                         window.open(url, "_blank").focus();
                     }}
                         className="ContextMenuItem">
@@ -100,7 +101,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
 
                     <ContextMenu.Separator className="ContextMenuSeparator" />
                     <ContextMenu.Item className="ContextMenuItem" onSelect={() => {
-                        copy("https://river.maxbittker.com/?id=" + item.Id)
+                        copy(SITE_URL + "/?id=" + item.Id)
                     }}>
                         Copy Link <div className="RightSlot"><Link2Icon /></div>
                     </ContextMenu.Item>

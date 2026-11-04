@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import seedrandom from "seedrandom";
+import { API_BASE } from "./config";
 
 export default function useGetData(id, colCount) {
     const [lastItem, setLastItem] = useState(null);
@@ -27,7 +28,7 @@ export default function useGetData(id, colCount) {
         if (!id) {
             computedOffset = page;
         }
-        let url = "https://river.maxbittker.com/neighbors?" +
+        let url = API_BASE + "/neighbors?" +
             new URLSearchParams({
                 id: wanderId || id,
                 limit: computedLimit,
