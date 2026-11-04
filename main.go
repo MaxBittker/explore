@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"html/template"
 	"io"
@@ -360,7 +361,10 @@ func (s *Server) handleFlag(c echo.Context) error {
 	if err := c.Bind(&flagData); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid flag data")
 	}
-	if flagData.Pw == password {
+	// Moderation actions require FLAG_PASSWORD to be configured; an unset
+	// password must not match the empty pw that ordinary visitors send.
+	isAdmin := password != "" && subtle.ConstantTimeCompare([]byte(flagData.Pw), []byte(password)) == 1
+	if isAdmin {
 		if flagData.Flag == "boring" {
 			query2 := s.db.Debug().Exec("delete from clusters where cluster_id in (select cluster_id from clusters where block_id = ?)", flagData.Id)
 			if query2.Error != nil {
@@ -370,7 +374,10 @@ func (s *Server) handleFlag(c echo.Context) error {
 			}
 		}
 		if flagData.Flag == "nsfw" {
-			s.db.Debug().Exec(fmt.Sprintf("UPDATE blocks SET nsfw = true where id = %d", flagData.Id))
+			if err := s.db.Exec("UPDATE blocks SET nsfw = true WHERE id = ?", flagData.Id).Error; err != nil {
+				log.Error(err)
+				return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
+			}
 		}
 		if flagData.Flag == "cool" {
 			query2 := s.db.Debug().Exec(`
