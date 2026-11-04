@@ -166,6 +166,7 @@ var runCmd = &cli.Command{
 		}
 
 		e.GET("/neighbors", s.handleGetNeighbors)
+		e.POST("/vectorNeighbors", s.handleVectorNeighbors)
 		e.POST("/api/flag", s.handleFlag)
 		atd := cctx.String("auto-tls-domain")
 		if atd != "" {
@@ -380,6 +381,12 @@ type FlagData struct {
 	Pw   string `json:"pw"`
 }
 
+type VectorSearchRequest struct {
+	Vector []float64 `json:"vector"`
+	Limit  int       `json:"limit,omitempty"`
+	Offset int       `json:"offset,omitempty"`
+}
+
 func (s *Server) handleFlag(c echo.Context) error {
 	var flagData FlagData
 
@@ -443,6 +450,86 @@ func (s *Server) handleFlag(c echo.Context) error {
 		"flag": flagData.Flag,
 	})
 
+}
+
+func (s *Server) handleVectorNeighbors(c echo.Context) error {
+	var req VectorSearchRequest
+
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid vector search request")
+	}
+
+	// Validate vector dimension
+	if len(req.Vector) != 512 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Vector must be 512 dimensional")
+	}
+
+	// Set default values if not provided
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 35
+	}
+	offset := req.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var images []imageMeta
+
+	s.db.Exec("SET hnsw.ef_search = 70;")
+
+	// Convert vector to PostgreSQL array format
+	vectorStr := "["
+	for i, val := range req.Vector {
+		if i > 0 {
+			vectorStr += ","
+		}
+		vectorStr += fmt.Sprintf("%f", val)
+	}
+	vectorStr += "]"
+
+	err := s.db.Raw(
+		`
+		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
+		FROM blocks
+		WHERE blocks.thumb IS NOT NULL
+		and blocks.embedding is not null
+		and nsfw is not true
+		ORDER BY blocks.embedding <#> ?::vector
+		LIMIT ?
+		OFFSET ?
+	`, vectorStr, limit, offset).Scan(&images).Error
+
+	if err != nil {
+		log.Error(err)
+		return &echo.HTTPError{
+			Code:    500,
+			Message: fmt.Sprintf("vector neighbors search failed: %s", err),
+		}
+	}
+
+	// Remove images with too similar phash values for deduplication
+	var filteredImages []imageMeta
+	var seenPhashes []int64
+
+	for _, img := range images {
+		if img.Phash == 0 || !slices.Contains(seenPhashes, img.Phash) {
+			seenPhashes = append(seenPhashes, img.Phash)
+			filteredImages = append(filteredImages, img)
+		}
+	}
+
+	if len(filteredImages) > 0 {
+		images = filteredImages
+	}
+
+	type neighborsResults struct {
+		Images []imageMeta `json:"images"`
+	}
+
+	return c.JSON(200, neighborsResults{
+		Images: images,
+	})
 }
 
 func NormalizeVector(vec []float64) {
