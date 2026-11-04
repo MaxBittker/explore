@@ -66,6 +66,13 @@ var runCmd = &cli.Command{
 		&cli.StringFlag{
 			Name: "auto-tls-domain",
 		},
+		&cli.StringFlag{
+			Name: "listen",
+			// Browsers refuse to connect to :6000 (reserved for X11), so pick
+			// another port, e.g. :8787, when hitting the API from a local frontend.
+			Value:   ":6000",
+			EnvVars: []string{"LISTEN_ADDR"},
+		},
 	},
 	Action: func(cctx *cli.Context) error {
 
@@ -135,7 +142,7 @@ var runCmd = &cli.Command{
 		}
 		go func() {
 
-			var port = ":6000"
+			port := cctx.String("listen")
 
 			if atd != "" {
 				panic(e.StartAutoTLS(port))
