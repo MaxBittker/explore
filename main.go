@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"html/template"
 	"io"
@@ -97,6 +96,7 @@ var runCmd = &cli.Command{
 		}
 
 		e := echo.New()
+		e.IPExtractor = clientIP
 		e.Use(middleware.Logger())
 		e.Use(middleware.Recover())
 		e.Use(middleware.CORS())
@@ -226,55 +226,6 @@ func clampPage(limit, offset int) (int, int) {
 		offset = 0
 	}
 	return limit, offset
-}
-
-type FlagData struct {
-	Id   int    `json:"id"`
-	Flag string `json:"flag"`
-	Pw   string `json:"pw"`
-}
-
-func (s *Server) handleFlag(c echo.Context) error {
-	var flagData FlagData
-
-	var password = os.Getenv("FLAG_PASSWORD")
-
-	if err := c.Bind(&flagData); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid flag data")
-	}
-	// Moderation actions require FLAG_PASSWORD to be configured; an unset
-	// password must not match the empty pw that ordinary visitors send.
-	isAdmin := password != "" && subtle.ConstantTimeCompare([]byte(flagData.Pw), []byte(password)) == 1
-	if isAdmin {
-		var err error
-		switch flagData.Flag {
-		case "boring":
-			err = s.db.Exec("DELETE FROM clusters WHERE cluster_id IN (SELECT cluster_id FROM clusters WHERE block_id = ?)", flagData.Id).Error
-		case "nsfw":
-			err = s.db.Exec("UPDATE blocks SET nsfw = true WHERE id = ?", flagData.Id).Error
-		case "cool":
-			err = s.db.Exec(`
-			INSERT INTO clusters (cluster_id, block_id)
-			SELECT COALESCE((SELECT MAX(cluster_id) FROM clusters), 0) + 1, ?
-			`, flagData.Id).Error
-		}
-		if err != nil {
-			log.Error(err)
-			return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
-		}
-		if err := s.refreshRandomSeeds(); err != nil {
-			log.Error(err)
-		}
-	}
-	query := s.db.Exec("INSERT INTO flags (block_id, flag) VALUES (?, ?)", flagData.Id, flagData.Flag)
-	if query.Error != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"id":   strconv.Itoa(flagData.Id),
-		"flag": flagData.Flag,
-	})
 }
 
 type VectorSearchRequest struct {

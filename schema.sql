@@ -37,8 +37,15 @@ CREATE TABLE IF NOT EXISTS connections (
 CREATE TABLE IF NOT EXISTS flags (
     id SERIAL PRIMARY KEY,
     block_id INTEGER REFERENCES blocks(id),
-    flag text
+    flag text,
+    -- pseudonymous visitor id (hashed IP); NULL for flags recorded before
+    -- crowd thresholds existed
+    voter text
 );
+
+-- migration for databases created before the voter column
+ALTER TABLE flags ADD COLUMN IF NOT EXISTS voter text;
+CREATE INDEX IF NOT EXISTS flags_block_flag ON flags (block_id, flag);
 
 CREATE TABLE IF NOT EXISTS clusters (
     id SERIAL PRIMARY KEY,

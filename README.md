@@ -20,8 +20,9 @@ DATABASE_URL=postgres://... go run . run
 Environment:
 
 - `DATABASE_URL`: Postgres connection string.
-- `FLAG_PASSWORD`: enables moderation flags (nsfw / boring / cool). Moderation
-  is disabled when unset.
+- `FLAG_PASSWORD`: admin password; flags sent with it apply immediately.
+  Visitor flags apply once enough distinct visitors agree (see
+  `crowdThresholds` in `flags.go`).
 - `LISTEN_ADDR` (or `--listen`): listen address, default `:6000`.
 
 The frontend calls the production API by default. To point `npm run dev` at a
