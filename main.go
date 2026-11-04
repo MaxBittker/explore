@@ -18,7 +18,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	cli "github.com/urfave/cli/v2"
 	"golang.org/x/crypto/acme/autocert"
-	"golang.org/x/exp/slices"
 	gorm "gorm.io/gorm"
 )
 
@@ -36,16 +35,9 @@ func main() {
 	app.RunAndExitOnError()
 }
 
-type imageMeta struct {
-	Id     int
-	Width  int
-	Height int
-	Thumb  string
-	Phash  int64 `json:"phash,omitempty"`
-}
 type Server struct {
-	db           *gorm.DB
-	cachedRandom []imageMeta
+	db    *gorm.DB
+	seeds randomSeeds
 }
 
 type Template struct {
@@ -152,23 +144,7 @@ var runCmd = &cli.Command{
 			}
 		}()
 
-		err = s.db.Debug().Raw(
-			fmt.Sprintf(
-				`
-				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height 
-				FROM blocks
-				join clusters on blocks.id = clusters.block_id
-				WHERE blocks.thumb IS NOT NULL
-				and blocks.embedding is not null
-				and nsfw is not true
-				and blocks.id in (
-					select max(block_id) from clusters group by cluster_id
-				)
-				order by clusters.id desc
-				LIMIT %d
-			`, 500)).Scan(&s.cachedRandom).Error
-
-		if err != nil {
+		if err := s.refreshRandomSeeds(); err != nil {
 			log.Error(err)
 		}
 		select {}
@@ -196,144 +172,49 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 		offset = v
 	}
 
-	var err error
-
-	var images []imageMeta
-
-	s.db.Exec("SET hnsw.ef_search = 70;")
 	if blockId == "audit" {
-		shouldReturn, returnValue := audit(s, limit, offset, &images)
-		if shouldReturn {
-			return returnValue
-		}
-		type neighborsResults struct {
-			Images []imageMeta `json:"images"`
-		}
-
-		return e.JSON(200, neighborsResults{
-			Images: images,
-		})
-
-	}
-
-	if blockId == "" || blockId == "null" || blockId == "undefined" {
-
-		var images2 []imageMeta
-
-		for i := 0; i < 3; i++ {
-			blockId = strconv.Itoa(s.cachedRandom[((offset*3)+i)%len(s.cachedRandom)].Id)
-			miniOffset := int(10 * int(offset/len(s.cachedRandom)))
-			miniLimit := int(limit / 3)
-			err = s.db.Raw(
-				`
-				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Phash
-				FROM blocks
-				WHERE blocks.thumb IS NOT NULL
-				and blocks.embedding is not null
-				and nsfw is not true
-				ORDER BY blocks.embedding <#> 
-					(SELECT embedding FROM blocks WHERE id = ?)
-				LIMIT ?
-				OFFSET ?
-			
-			`, blockId, miniLimit, miniOffset).Scan(&images2).Error
-			if err != nil {
-				log.Error(err)
-				return &echo.HTTPError{
-					Code:    500,
-					Message: fmt.Sprintf("neighbors failed: %s", err),
-				}
-			}
-			images = append(images, images2...)
-		}
-
-	} else {
-
-		err = s.db.Raw(
-			`
-		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Phash
-		FROM blocks
-		WHERE blocks.thumb IS NOT NULL
-		and blocks.embedding is not null
-		and nsfw is not true
-		ORDER BY blocks.embedding <#> 
-			(SELECT embedding FROM blocks WHERE id = ?)
-		LIMIT ?
-		OFFSET ?
-	
-	`, blockId, limit, offset).Scan(&images).Error
+		images, err := s.clusterHeads(limit, offset)
 		if err != nil {
 			log.Error(err)
-			return &echo.HTTPError{
-				Code:    500,
-				Message: fmt.Sprintf("neighbors failed: %s", err),
+			return echo.NewHTTPError(http.StatusInternalServerError, "audit failed")
+		}
+		return e.JSON(http.StatusOK, neighborsResults{Images: images})
+	}
+
+	var images []imageMeta
+	if blockId == "" || blockId == "null" || blockId == "undefined" {
+		// Home page: blend neighbors of three cached seed blocks, rotating
+		// through the seed list as offset (the page number) grows.
+		seeds := s.seeds.get()
+		if len(seeds) == 0 {
+			return echo.NewHTTPError(http.StatusServiceUnavailable, "random seeds not loaded")
+		}
+		for i := 0; i < 3; i++ {
+			seed := seeds[((offset*3)+i)%len(seeds)].Id
+			miniOffset := 10 * (offset / len(seeds))
+			batch, err := s.nearestBlocks(embeddingOfBlock, seed, limit/3, miniOffset)
+			if err != nil {
+				log.Error(err)
+				return echo.NewHTTPError(http.StatusInternalServerError, "neighbors failed")
 			}
+			images = append(images, batch...)
+		}
+	} else {
+		var err error
+		images, err = s.nearestBlocks(embeddingOfBlock, blockId, limit, offset)
+		if err != nil {
+			log.Error(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "neighbors failed")
 		}
 	}
 
-	// remove images with too similar values for distance
-	var filteredImages []imageMeta
-	var seenPhashes []int64
-
-	for _, img := range images {
-		// check if phash occurs in seenPhashes:
-		if img.Phash == 0 || !slices.Contains(seenPhashes, img.Phash) {
-			seenPhashes = append(seenPhashes, img.Phash)
-			filteredImages = append(filteredImages, img)
-		}
-
-	}
-
-	if len(filteredImages) > 0 {
-		images = filteredImages
-	}
-
-	type neighborsResults struct {
-		Images []imageMeta `json:"images"`
-	}
-
-	return e.JSON(200, neighborsResults{
-		Images: images,
-	})
-
-}
-
-func audit(s *Server, limit int, offset int, images *[]imageMeta) (bool, error) {
-	err := s.db.Debug().Raw(
-		fmt.Sprintf(
-			`
-			SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height 
-			FROM blocks
-			WHERE blocks.thumb IS NOT NULL
-			and blocks.embedding is not null
-			and nsfw is not true
-			and blocks.id in (
-				select max(block_id) from clusters group by cluster_id
-			)
-			LIMIT %d
-			OFFSET %d
-		
-		`, limit, offset)).Scan(&images).Error
-	if err != nil {
-		log.Error(err)
-		return true, &echo.HTTPError{
-			Code:    500,
-			Message: fmt.Sprintf("audit failed: %s", err),
-		}
-	}
-	return false, nil
+	return e.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images)})
 }
 
 type FlagData struct {
 	Id   int    `json:"id"`
 	Flag string `json:"flag"`
 	Pw   string `json:"pw"`
-}
-
-type VectorSearchRequest struct {
-	Vector []float64 `json:"vector"`
-	Limit  int       `json:"limit,omitempty"`
-	Offset int       `json:"offset,omitempty"`
 }
 
 func (s *Server) handleFlag(c echo.Context) error {
@@ -348,52 +229,25 @@ func (s *Server) handleFlag(c echo.Context) error {
 	// password must not match the empty pw that ordinary visitors send.
 	isAdmin := password != "" && subtle.ConstantTimeCompare([]byte(flagData.Pw), []byte(password)) == 1
 	if isAdmin {
-		if flagData.Flag == "boring" {
-			query2 := s.db.Debug().Exec("delete from clusters where cluster_id in (select cluster_id from clusters where block_id = ?)", flagData.Id)
-			if query2.Error != nil {
-				log.Error(query2.Error)
-
-				return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
-			}
-		}
-		if flagData.Flag == "nsfw" {
-			if err := s.db.Exec("UPDATE blocks SET nsfw = true WHERE id = ?", flagData.Id).Error; err != nil {
-				log.Error(err)
-				return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
-			}
-		}
-		if flagData.Flag == "cool" {
-			query2 := s.db.Debug().Exec(`
+		var err error
+		switch flagData.Flag {
+		case "boring":
+			err = s.db.Exec("DELETE FROM clusters WHERE cluster_id IN (SELECT cluster_id FROM clusters WHERE block_id = ?)", flagData.Id).Error
+		case "nsfw":
+			err = s.db.Exec("UPDATE blocks SET nsfw = true WHERE id = ?", flagData.Id).Error
+		case "cool":
+			err = s.db.Exec(`
 			INSERT INTO clusters (cluster_id, block_id)
-			SELECT 
-			   COALESCE((SELECT MAX(cluster_id) FROM clusters), 0) + 1, 
-			   ?
-			`, flagData.Id)
-			if query2.Error != nil {
-				log.Error(query2.Error)
-				return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
-			}
+			SELECT COALESCE((SELECT MAX(cluster_id) FROM clusters), 0) + 1, ?
+			`, flagData.Id).Error
 		}
-		err := s.db.Debug().Raw(
-			fmt.Sprintf(
-				`
-				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height 
-				FROM blocks
-				join clusters on blocks.id = clusters.block_id
-				WHERE blocks.thumb IS NOT NULL
-				and blocks.embedding is not null
-				and nsfw is not true
-				and blocks.id in (
-					select max(block_id) from clusters group by cluster_id
-				)
-				order by clusters.id desc
-				LIMIT %d
-			`, 500)).Scan(&s.cachedRandom).Error
-
 		if err != nil {
 			log.Error(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
 		}
-
+		if err := s.refreshRandomSeeds(); err != nil {
+			log.Error(err)
+		}
 	}
 	query := s.db.Exec("INSERT INTO flags (block_id, flag) VALUES (?, ?)", flagData.Id, flagData.Flag)
 	if query.Error != nil {
@@ -404,7 +258,12 @@ func (s *Server) handleFlag(c echo.Context) error {
 		"id":   strconv.Itoa(flagData.Id),
 		"flag": flagData.Flag,
 	})
+}
 
+type VectorSearchRequest struct {
+	Vector []float64 `json:"vector"`
+	Limit  int       `json:"limit,omitempty"`
+	Offset int       `json:"offset,omitempty"`
 }
 
 func (s *Server) handleVectorNeighbors(c echo.Context) error {
@@ -429,10 +288,6 @@ func (s *Server) handleVectorNeighbors(c echo.Context) error {
 		offset = 0
 	}
 
-	var images []imageMeta
-
-	s.db.Exec("SET hnsw.ef_search = 70;")
-
 	// Convert vector to PostgreSQL array format
 	vectorStr := "["
 	for i, val := range req.Vector {
@@ -443,46 +298,11 @@ func (s *Server) handleVectorNeighbors(c echo.Context) error {
 	}
 	vectorStr += "]"
 
-	err := s.db.Raw(
-		`
-		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Phash
-		FROM blocks
-		WHERE blocks.thumb IS NOT NULL
-		and blocks.embedding is not null
-		and nsfw is not true
-		ORDER BY blocks.embedding <#> ?::vector
-		LIMIT ?
-		OFFSET ?
-	`, vectorStr, limit, offset).Scan(&images).Error
-
+	images, err := s.nearestBlocks(literalVector, vectorStr, limit, offset)
 	if err != nil {
 		log.Error(err)
-		return &echo.HTTPError{
-			Code:    500,
-			Message: fmt.Sprintf("vector neighbors search failed: %s", err),
-		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "vector neighbors search failed")
 	}
 
-	// Remove images with too similar phash values for deduplication
-	var filteredImages []imageMeta
-	var seenPhashes []int64
-
-	for _, img := range images {
-		if img.Phash == 0 || !slices.Contains(seenPhashes, img.Phash) {
-			seenPhashes = append(seenPhashes, img.Phash)
-			filteredImages = append(filteredImages, img)
-		}
-	}
-
-	if len(filteredImages) > 0 {
-		images = filteredImages
-	}
-
-	type neighborsResults struct {
-		Images []imageMeta `json:"images"`
-	}
-
-	return c.JSON(200, neighborsResults{
-		Images: images,
-	})
+	return c.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images)})
 }

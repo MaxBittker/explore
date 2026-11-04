@@ -9,7 +9,6 @@ require (
 	github.com/labstack/echo/v4 v4.10.2
 	github.com/urfave/cli/v2 v2.25.3
 	golang.org/x/crypto v0.12.0
-	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	gorm.io/gorm v1.25.1
 )
 
