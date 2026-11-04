@@ -155,22 +155,11 @@ var runCmd = &cli.Command{
 func (s *Server) handleGetNeighbors(e echo.Context) error {
 
 	blockId := e.QueryParam("id")
-	var limit int = 35
-	if lims := e.QueryParam("limit"); lims != "" {
-		v, err := strconv.Atoi(lims)
-		if err != nil {
-			return err
-		}
-		limit = v
+	var limit, offset int
+	if err := echo.QueryParamsBinder(e).Int("limit", &limit).Int("offset", &offset).BindError(); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "limit and offset must be integers")
 	}
-	var offset int = 0
-	if off := e.QueryParam("offset"); off != "" {
-		v, err := strconv.Atoi(off)
-		if err != nil {
-			return err
-		}
-		offset = v
-	}
+	limit, offset = clampPage(limit, offset)
 
 	if blockId == "audit" {
 		images, err := s.clusterHeads(limit, offset)
@@ -209,6 +198,27 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 	}
 
 	return e.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images)})
+}
+
+const (
+	defaultPageSize = 35
+	// maxPageSize bounds a single request; the site asks for at most 6*9.
+	maxPageSize = 200
+)
+
+// clampPage applies the default page size to a missing/non-positive limit,
+// caps it at maxPageSize, and floors offset at zero.
+func clampPage(limit, offset int) (int, int) {
+	if limit <= 0 {
+		limit = defaultPageSize
+	}
+	if limit > maxPageSize {
+		limit = maxPageSize
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
 }
 
 type FlagData struct {
@@ -278,15 +288,7 @@ func (s *Server) handleVectorNeighbors(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Vector must be 512 dimensional")
 	}
 
-	// Set default values if not provided
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 35
-	}
-	offset := req.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset := clampPage(req.Limit, req.Offset)
 
 	// Convert vector to PostgreSQL array format
 	vectorStr := "["
