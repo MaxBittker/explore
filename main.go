@@ -283,24 +283,13 @@ func (s *Server) handleVectorNeighbors(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid vector search request")
 	}
 
-	// Validate vector dimension
-	if len(req.Vector) != 512 {
-		return echo.NewHTTPError(http.StatusBadRequest, "Vector must be 512 dimensional")
+	if len(req.Vector) != embeddingDim {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Vector must be %d dimensional", embeddingDim))
 	}
 
 	limit, offset := clampPage(req.Limit, req.Offset)
 
-	// Convert vector to PostgreSQL array format
-	vectorStr := "["
-	for i, val := range req.Vector {
-		if i > 0 {
-			vectorStr += ","
-		}
-		vectorStr += fmt.Sprintf("%f", val)
-	}
-	vectorStr += "]"
-
-	images, err := s.nearestBlocks(literalVector, vectorStr, limit, offset)
+	images, err := s.nearestBlocks(literalVector, vectorLiteral(req.Vector), limit, offset)
 	if err != nil {
 		log.Error(err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "vector neighbors search failed")

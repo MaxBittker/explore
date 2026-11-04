@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	gorm "gorm.io/gorm"
@@ -26,6 +27,24 @@ const imageColumns = `blocks.id as Id, blocks.thumb as Thumb, blocks.width as Wi
 const visibleBlocks = `blocks.thumb IS NOT NULL
 		and blocks.embedding is not null
 		and nsfw is not true`
+
+// embeddingDim must match the vector(N) column in schema.sql and the model
+// that produced the stored embeddings.
+const embeddingDim = 512
+
+// vectorLiteral formats v as a pgvector text literal ("[1,2,3]") at full
+// float32 precision, which is what pgvector stores.
+func vectorLiteral(v []float64) string {
+	buf := make([]byte, 0, len(v)*12)
+	buf = append(buf, '[')
+	for i, x := range v {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = strconv.AppendFloat(buf, x, 'g', -1, 32)
+	}
+	return string(append(buf, ']'))
+}
 
 // SQL expressions for the query vector passed to nearestBlocks.
 const (

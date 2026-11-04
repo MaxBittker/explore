@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS blocks (
     phash BIGINT DEFAULT null,
     nsfw BOOLEAN DEFAULT null,
     gif BOOLEAN DEFAULT null,
+    -- L2-normalized (search orders by inner product, <#>). The dimension must
+    -- match embeddingDim in queries.go.
     embedding vector(512)
 );
 
