@@ -226,7 +226,7 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 			miniLimit := int(limit / 3)
 			err = s.db.Raw(
 				`
-				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
+				SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Phash
 				FROM blocks
 				WHERE blocks.thumb IS NOT NULL
 				and blocks.embedding is not null
@@ -251,7 +251,7 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 
 		err = s.db.Raw(
 			`
-		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
+		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Phash
 		FROM blocks
 		WHERE blocks.thumb IS NOT NULL
 		and blocks.embedding is not null
@@ -445,7 +445,7 @@ func (s *Server) handleVectorNeighbors(c echo.Context) error {
 
 	err := s.db.Raw(
 		`
-		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Hash
+		SELECT blocks.id as Id, blocks.thumb as Thumb, blocks.width as Width, blocks.height as Height, blocks.phash as Phash
 		FROM blocks
 		WHERE blocks.thumb IS NOT NULL
 		and blocks.embedding is not null
