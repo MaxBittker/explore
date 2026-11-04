@@ -1,38 +1,23 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"html/template"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
-	"time"
-
-	gif "github.com/NathanBaulch/gifx"
 
 	cliutil "github.com/bluesky-social/indigo/util/cliutil"
-	"github.com/corona10/goimagehash"
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	logging "github.com/ipfs/go-log"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-
-	// . "github.com/whyrusleeping/algoz/models"
+	cli "github.com/urfave/cli/v2"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/exp/slices"
-	"gonum.org/v1/gonum/floats"
-
-	cli "github.com/urfave/cli/v2"
-
 	gorm "gorm.io/gorm"
 )
 
@@ -85,9 +70,6 @@ var runCmd = &cli.Command{
 
 		&cli.StringFlag{
 			Name: "auto-tls-domain",
-		},
-		&cli.BoolFlag{
-			Name: "feed-test",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -157,10 +139,6 @@ var runCmd = &cli.Command{
 
 		e.Use(sentryecho.New(sentryecho.Options{}))
 
-		// e.HTTPErrorHandler = func(err error, c echo.Context) {
-		// 	log.Error(err)
-		// }
-
 		s := &Server{
 			db: db,
 		}
@@ -188,11 +166,6 @@ var runCmd = &cli.Command{
 			} else {
 				panic(e.Start(port))
 			}
-		}()
-
-		go func() {
-			// s.pollAllImagePaths(context.Background())
-			// s.projectAllEmbeddings(context.Background())
 		}()
 
 		err = s.db.Debug().Raw(
@@ -265,7 +238,6 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 
 		for i := 0; i < 3; i++ {
 			blockId = strconv.Itoa(s.cachedRandom[((offset*3)+i)%len(s.cachedRandom)].Id)
-			// log.Error(offset, (offset*3)+i)
 			miniOffset := int(10 * int(offset/len(s.cachedRandom)))
 			miniLimit := int(limit / 3)
 			err = s.db.Raw(
@@ -315,17 +287,10 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 		}
 	}
 
-	// if offset == 0 {
-	// 	go func(blockId string) {
-	// 		s.db.Exec("UPDATE blocks SET votes = votes + 1 where id = ?", blockId)
-	// 	}(blockId)
-	// }
-
 	// remove images with too similar values for distance
 	var filteredImages []imageMeta
 	var seenPhashes []int64
 
-	// sortDelta:
 	for _, img := range images {
 		// check if phash occurs in seenPhashes:
 		if img.Phash == 0 || !slices.Contains(seenPhashes, img.Phash) {
@@ -530,99 +495,4 @@ func (s *Server) handleVectorNeighbors(c echo.Context) error {
 	return c.JSON(200, neighborsResults{
 		Images: images,
 	})
-}
-
-func NormalizeVector(vec []float64) {
-	norm := floats.Norm(vec, 2) //calculates the L2 norm (Euclidean norm) of vec
-	if norm == 0 {
-		// handle it accordingly
-		log.Error("Norm is zero")
-	} else {
-		for i := range vec {
-			vec[i] /= norm
-		}
-	}
-}
-
-func Min(x, y int) int {
-	if x > y {
-		return y
-	}
-	return x
-}
-
-func (s *Server) projectAllEmbeddings(ctx context.Context) error {
-	c := time.Tick(100 * time.Millisecond)
-	// log.Error(v1.Dims())
-	for range c {
-
-		var images []imageMeta
-
-		s.db.Raw(`
-		SELECT blocks.thumb as Thumb, blocks.id as Id
-		FROM blocks
-		WHERE blocks.nsfw is not true
-		and blocks.phash is null
-		and blocks.gif is not true
-		and blocks.embedding is not null
-		LIMIT 30
-		`).Scan(&images)
-
-		// sum := mat.NewVecDense(512, nil)
-		var wg sync.WaitGroup
-
-		for _, img := range images {
-			wg.Add(1)
-			go func(imgMeta imageMeta) {
-				defer wg.Done()
-
-				file, err := http.Get(imgMeta.Thumb)
-				if err != nil {
-					log.Error(err)
-					return
-				}
-				defer file.Body.Close()
-
-				var img image.Image
-				var err2 error
-				// log.Error(file.Header.Get("Content-Type"))
-				if file.Header.Get("Content-Type") == "image/gif" {
-					img, err2 = decodeFirstFrame(file)
-					s.db.Exec(fmt.Sprintf("UPDATE blocks SET gif = true where id = %d", imgMeta.Id))
-					if err2 != nil {
-						log.Error(err2)
-
-						return
-					}
-				} else {
-					img, _, err2 = image.Decode(file.Body)
-					if err2 != nil {
-						log.Error(err2)
-						return
-					}
-				}
-
-				hash, err := goimagehash.PerceptionHash(img)
-				if err != nil {
-					log.Error(err)
-					return
-				}
-				// log.Error(hash.GetHash())
-				s.db.Exec(fmt.Sprintf("UPDATE blocks SET phash = %d where id = %d", int64(hash.GetHash()), imgMeta.Id))
-			}(img)
-		}
-
-		wg.Wait() // Wait for all goroutines to finish.
-	}
-	return nil
-}
-
-func decodeFirstFrame(file *http.Response) (image.Image, error) {
-	gifImg, err := gif.Decode(file.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// gifImg.Image[0] is the first frame
-	return gifImg, nil
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import seedrandom from "seedrandom";
 
 export default function useGetData(id, colCount) {
@@ -22,7 +22,6 @@ export default function useGetData(id, colCount) {
     useEffect(() => {
         setLoading(true);
         let multiplier = 6;
-        // console.log("offset", offset, offsetOffset)
         let computedOffset = Math.max(offset - offsetOffset, 0);
         let computedLimit = multiplier * colCount;
         if (!id) {
@@ -34,7 +33,6 @@ export default function useGetData(id, colCount) {
                 limit: computedLimit,
                 offset: computedOffset,
             });
-        // console.log(url)
         fetch(url)
             .then((res) => res.json())
             .then((newData) => {
@@ -49,7 +47,6 @@ export default function useGetData(id, colCount) {
                     } else {
                         // hack to request more
                         setPage(page + 1)
-                        // setOffsetOffset(offset + 1)
                     }
 
                     return
@@ -64,11 +61,6 @@ export default function useGetData(id, colCount) {
                 setError(null);
             })
             .finally(() => setLoading(false));
-
-        // .catch((err) => {
-        //     console.error(err);
-        //     setError(err);
-        // })
 
         return () => {
             setLoading(false);
@@ -91,7 +83,6 @@ export default function useGetData(id, colCount) {
             });
             window.scrollTo(0, 0);
         }
-        // console.log(remnantColumns, freshImages.length)
         let newColumns = collateListBalanced(
             freshImages,
             colCount,

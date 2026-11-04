@@ -1,7 +1,6 @@
 import "./App.css";
 import './menuStyles.css';
 
-import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import VisibilitySensor from "react-visibility-sensor";
 import { useWindowSize, useLocalStorage } from "usehooks-ts";

@@ -43,14 +43,9 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                     to={'?id=' + item.Id}
                     className={"img-container"}
                     onClick={(e) => {
-                        // e.preventDefault();
                         if (e.ctrlKey || e.metaKey) return
                         reset(0);
                         setLastItem({ ...item, x: index, y: i });
-                        // setSearchParams({
-                        //     id: item.Id,
-                        // });
-                        // play()
                     }}
                 >
                     {appliedFlag && <div className="flag-thanks">   Marked as {appliedFlag}! Thank you

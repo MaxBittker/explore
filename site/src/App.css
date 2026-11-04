@@ -71,15 +71,6 @@ button img {
           filter: brightness(105%);
      }
 
-
-     .img-container:hover .corner-button {
-          opacity: 1;
-     }
-
-     .img-container:hover .corner-button:hover {
-          opacity: 1;
-     }
-
 }
 
 .flag-thanks {
@@ -117,17 +108,6 @@ img {
 }
 
 
-.corner-button {
-     cursor: pointer;
-     position: absolute;
-     top: 1px;
-     z-index: 3;
-     right: 2px;
-     opacity: 0;
-     background-color: transparent;
-     border-width: 0;
-     transition: all .1s ease-in-out;
-}
 
 
 body::-webkit-scrollbar {

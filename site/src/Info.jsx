@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 import click from '../public/block.wav';
 import useSound from "use-sound";
@@ -45,7 +44,6 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
       }}
     >
       <img width={24} src={spiral2} title="info" />
-      {/* <InfoCircledIcon width={24} height={24} /> */}
     </button>)
   }
   let w = Math.min(420, window.innerWidth - 70)
@@ -57,7 +55,6 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
         x: -w + 4,
         y: -2,
         width: w,
-        // height: 200,
       }}
     >
       <div className="info" style={style}>
@@ -72,7 +69,6 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           <img width={12} src={spiral2} title="home" style={{ position: 'absolute', left: 0, bottom: 0, filter: 'brightness(1.5)' }} />
           <img width={12} src={spiral2} title="home" style={{ position: 'absolute', right: -1, bottom: 0, transform: 'rotate(270deg)' }} />
 
-          {/* <img draggable={false} src={river} style={{ width: "100%", height: "10px" }}></img> */}
           <h3> River is a visual connection engine</h3>
           Clear your mind and surf laterally though image space.
           <br />
@@ -83,12 +79,8 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           Right click any image to open it on <a href="https://are.na?utm_source=river.maxbittker.com">Are.na</a> for source, full res, and human-curated connections.
           <br />
           <br />
-          {/* Connect good finds to my public channel, <a href="https://www.are.na/max-bittker/found-in-the-river">found in the river</a>.
-          <br />
-          <br /> */}
 
         </span>
-        {/* <details> */}
         <summary>Optional Challenge, find these items: </summary>
         <ul>
           {challengeItems.filter((item) => {
@@ -113,7 +105,6 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           })
           }
         </ul>
-        {/* </details> */}
         <br />
         <span className='small'>
           Built by <a href="https://maxbittker.com">Max Bittker</a>, September 2023, powered by CLIP & pgvector

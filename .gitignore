@@ -1,2 +1,11 @@
 classify/venv
 classify/*.onnx
+
+# local config / secrets (FLAG_PASSWORD, DATABASE_URL)
+.env
+.env.*
+
+# default sqlite path and go build output
+data/
+/algoz
+.DS_Store

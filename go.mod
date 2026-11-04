@@ -3,16 +3,13 @@ module github.com/whyrusleeping/algoz
 go 1.20
 
 require (
-	github.com/NathanBaulch/gifx v0.0.0-20220621110330-1fbd2e6a83a4
 	github.com/bluesky-social/indigo v0.0.0-20230828224954-ebc21133a67a
-	github.com/corona10/goimagehash v1.1.0
 	github.com/getsentry/sentry-go v0.23.0
 	github.com/ipfs/go-log v1.0.5
 	github.com/labstack/echo/v4 v4.10.2
 	github.com/urfave/cli/v2 v2.25.3
 	golang.org/x/crypto v0.12.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
-	gonum.org/v1/gonum v0.14.0
 	gorm.io/gorm v1.25.1
 )
 
@@ -74,7 +71,6 @@ require (
 	github.com/multiformats/go-multibase v0.2.0 // indirect
 	github.com/multiformats/go-multihash v0.2.1 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
-	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/polydawn/refmt v0.89.1-0.20221221234430-40501e09de1f // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
