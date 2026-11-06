@@ -43,6 +43,8 @@ export default function useGetData(id, colCount) {
                 if (!newImages || newImages.length == 0) {
                     console.log("END!")
                     if (id) {
+                        // Nothing to wander from if this block had no neighbors at all.
+                        if (images.length === 0) return
                         setWanderId(images[images.length - 1].Id)
                         setOffsetOffset(offset)
                     } else {
