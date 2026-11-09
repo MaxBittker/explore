@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	cliutil "github.com/bluesky-social/indigo/util/cliutil"
 	"github.com/getsentry/sentry-go"
@@ -38,6 +40,7 @@ type Server struct {
 	db       *gorm.DB
 	seeds    randomSeeds
 	embedder *embedder // nil when EMBED_URL is unset; search is then disabled
+	stats    *blockStats
 }
 
 type Template struct {
@@ -112,7 +115,10 @@ var runCmd = &cli.Command{
 
 		e := echo.New()
 		e.IPExtractor = clientIP
-		e.Use(middleware.Logger())
+		e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+			// Stats beacons arrive every few seconds per visitor; don't log each.
+			Skipper: func(c echo.Context) bool { return c.Path() == "/api/stats" },
+		}))
 		e.Use(middleware.Recover())
 		e.Use(middleware.CORS())
 		e.Static("/", "site/dist")
@@ -140,6 +146,7 @@ var runCmd = &cli.Command{
 		s := &Server{
 			db:       db,
 			embedder: newEmbedder(cctx.String("embed-url"), cctx.String("embed-token")),
+			stats:    newBlockStats(),
 		}
 		if s.embedder == nil {
 			log.Warn("EMBED_URL not set; search is disabled")
@@ -149,6 +156,7 @@ var runCmd = &cli.Command{
 		e.POST("/vectorNeighbors", s.handleVectorNeighbors)
 		e.POST("/embed", s.handleEmbed)
 		e.POST("/api/flag", s.handleFlag)
+		e.POST("/api/stats", s.handleStats)
 		atd := cctx.String("auto-tls-domain")
 		if atd != "" {
 			cachedir, err := os.UserCacheDir()
@@ -174,7 +182,16 @@ var runCmd = &cli.Command{
 		if err := s.refreshRandomSeeds(); err != nil {
 			log.Error(err)
 		}
-		select {}
+		go s.flushStatsLoop()
+
+		// Write out the last minute of block stats before exiting.
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		if err := s.flushStats(); err != nil {
+			log.Errorf("flushing block stats: %v", err)
+		}
+		return nil
 
 	},
 }

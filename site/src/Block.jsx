@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ArrowTopRightIcon, ExclamationTriangleIcon, CopyIcon, MinusCircledIcon, StarIcon, Link2Icon } from "@radix-ui/react-icons";
 import copy from 'clipboard-copy'
@@ -7,6 +7,7 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ReactComponent as ArenaLogo } from "../public/arena.svg";
 import { API_BASE, SITE_URL } from "./config";
 import openArena from "./openArena";
+import { observeImpression, recordClick } from "./stats";
 let last_hit = 0;
 
 function flagBlock(id) {
@@ -29,7 +30,9 @@ function flagBlock(id) {
 
     return [flaggedAs, flag]
 }
-export default function Block({ item, i, index, cWidth, reset, setLastItem, play }) {
+// track: count impressions and clicks for this tile (false for the block
+// the page is about, which isn't a recommendation).
+export default function Block({ item, i, index, cWidth, reset, setLastItem, play, track }) {
 
 
     let aspectRatio = item.Width / item.Height;
@@ -45,9 +48,15 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
     // element doesn't count the previous image.
     let [loadedSrc, setLoadedSrc] = useState(null);
     let loaded = loadedSrc === item.Thumb;
+    let imgEl = useRef(null);
     let imgRef = useCallback((el) => {
+        imgEl.current = el;
         if (el?.complete && el.naturalWidth) setLoadedSrc(el.getAttribute("src"));
     }, []);
+    // An impression needs the pixels: start watching once the image loads.
+    useEffect(() => {
+        if (track && loaded) return observeImpression(imgEl.current);
+    }, [track, loaded, item.Id]);
 
     return (
         <ContextMenu.Root>
@@ -64,6 +73,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                         marginLeft: item.hero && item.heroDir === "left" ? -cWidth : 0,
                     }}
                     onClick={(e) => {
+                        if (track) recordClick(item.Id);
                         if (e.ctrlKey || e.metaKey) return
                         reset(0);
                         const { hero, heroDir, clip, ...plain } = item;
@@ -74,6 +84,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                     </div>}
                     <img
                         ref={imgRef}
+                        data-bid={item.Id}
                         width={w}
                         height={h}
                         className={loaded ? "loaded" : undefined}

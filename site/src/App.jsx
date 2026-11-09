@@ -9,6 +9,7 @@ import Info from "./Info";
 import Block from "./Block";
 import block from "../public/blockshort.wav";
 import useGetData from "./getData";
+import { resetImpressions } from "./stats";
 import Search from "./Search";
 import { useTextVector, embedImage } from "./searchApi";
 import { ReactComponent as Back } from "../public/back.svg";
@@ -53,6 +54,9 @@ export default function App() {
   }, [imgKey, imageQuery]);
 
   const [play] = useSound(block, { volume: 0.1 });
+
+  // Each page (block, search or home) counts its impressions afresh.
+  useEffect(() => resetImpressions(), [id, q, imgKey]);
 
   let colCount = Math.round(width / 225);
   colCount = clamp(colCount, 3, 9)
@@ -176,6 +180,7 @@ export default function App() {
                   cWidth={cWidth}
                   setLastItem={setLastItem}
                   reset={String(item.Id) === id ? reroll : reset}
+                  track={String(item.Id) !== id}
                   play={play} />)}
               <div ref={(el) => (tails.current[index] = el)}>
                 {!error && Array.from({ length: GHOSTS_PER_COLUMN }, (_, k) => (

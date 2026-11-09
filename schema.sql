@@ -60,3 +60,15 @@ CREATE TABLE IF NOT EXISTS clusters (
     cluster_id INTEGER,
     block_id INTEGER REFERENCES blocks(id)
 );
+
+-- Grid engagement per block, accumulated in memory and added here about once
+-- a minute (stats.go). An impression is a loaded thumbnail at least half on
+-- screen, once per page view; the anchor/hero tile doesn't count. CTR is
+-- clicks / impressions. No foreign key, so deleting blocks isn't blocked.
+-- fillfactor leaves room on each page so the upserts update rows in place
+-- (HOT) without new index entries; the counters aren't indexed.
+CREATE TABLE IF NOT EXISTS block_stats (
+    block_id INTEGER PRIMARY KEY,
+    impressions INTEGER NOT NULL DEFAULT 0,
+    clicks INTEGER NOT NULL DEFAULT 0
+) WITH (fillfactor = 70);
