@@ -16,6 +16,9 @@
 }
 
 .ContextMenuContent {
+    /* above the hero tile (z 3), buttons (4), flag-thanks (5), info (6);
+       Radix copies this onto its popper wrapper */
+    z-index: 10;
     min-width: 150px;
     background-color: white;
     border-radius: 2px;
