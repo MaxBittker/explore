@@ -56,7 +56,7 @@ export default function App() {
 
   let colCount = Math.round(width / 225);
   colCount = clamp(colCount, 3, 9)
-  const { columns, loading, error, setLastItem, reset, loadMore, retry } = useGetData(id, colCount, search);
+  const { columns, loading, error, setLastItem, reset, reroll, loadMore, retry } = useGetData(id, colCount, search);
 
   // Each column's tail marks where its content ends.
   const tails = useRef([]);
@@ -175,7 +175,7 @@ export default function App() {
                   item={item} i={i} index={index}
                   cWidth={cWidth}
                   setLastItem={setLastItem}
-                  reset={reset}
+                  reset={String(item.Id) === id ? reroll : reset}
                   play={play} />)}
               <div ref={(el) => (tails.current[index] = el)}>
                 {!error && Array.from({ length: GHOSTS_PER_COLUMN }, (_, k) => (

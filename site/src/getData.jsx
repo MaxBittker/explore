@@ -34,6 +34,13 @@ export default function useGetData(id, colCount, search) {
     const wanderId = wander?.anchor === anchor ? wander.id : null;
     const offsetOffset = wander?.anchor === anchor ? wander.offset : 0;
 
+    // Clicking the image you're already on deals a fresh page: the grid
+    // restarts at the first rank we haven't fetched yet. baseOffset is where
+    // the current grid started (0 unless rerolled), tagged with its anchor
+    // like wander.
+    const [base, setBase] = useState(null);
+    const baseOffset = base?.anchor === anchor ? base.offset : 0;
+
     let reset = useCallback(() => {
         setOffset(0)
         setNextOffset(0)
@@ -46,6 +53,7 @@ export default function useGetData(id, colCount, search) {
     // stale cursor (the fetch already fired with it is superseded).
     useEffect(() => {
         setWander(null);
+        setBase(null);
         if (offset !== 0 || images.length > 0) {
             reset();
             setLastItem(null);
@@ -91,8 +99,17 @@ export default function useGetData(id, colCount, search) {
                 if (newImages.length == 0) {
                     if (raw.length == 0 && !home) {
                         console.log("END!")
-                        // Nothing to wander from if there were no results at all.
-                        if (images.length === 0) return
+                        if (images.length === 0) {
+                            // A reroll ran off the end: wrap around to the top.
+                            if (baseOffset > 0) {
+                                setBase(null);
+                                setWander(null);
+                                setNextOffset(0);
+                                setOffset(0);
+                            }
+                            // Otherwise nothing to wander from: no results at all.
+                            return
+                        }
                         setWander({ anchor, id: images[images.length - 1].Id, offset })
                     } else {
                         // A page of nothing new: skip past it.
@@ -127,7 +144,7 @@ export default function useGetData(id, colCount, search) {
     useEffect(() => {
         if (freshImages.length === 0) return
         let remnantColumns = columns;
-        if (offset === 0) {
+        if (offset === baseOffset) {
             remnantColumns = columns.map((c, i) => {
                 if (i !== lastItem?.x) {
                     return []
@@ -157,11 +174,20 @@ export default function useGetData(id, colCount, search) {
         setFreshImages([])
         setColumns(newColumns)
 
-    }, [id, searchKey, freshImages, columns, offset, colCount, lastItem])
+    }, [id, searchKey, freshImages, columns, offset, baseOffset, colCount, lastItem])
 
     let loadMore = useCallback(() => {
         setOffset(nextOffset)
     }, [nextOffset]);
+
+    let reroll = useCallback(() => {
+        setBase({ anchor, offset: nextOffset });
+        setOffset(nextOffset);
+        setImages([]);
+        setError(null);
+        // Refetch even if the cursor didn't move (a page still in flight).
+        setRetries((r) => r + 1);
+    }, [anchor, nextOffset]);
 
     let retry = useCallback(() => {
         setError(null)
@@ -169,7 +195,7 @@ export default function useGetData(id, colCount, search) {
     }, []);
 
     // Report a pending search as loading so infinite scroll waits for it.
-    return { columns, loading: loading || searchPending, error, setLastItem, reset, loadMore, retry };
+    return { columns, loading: loading || searchPending, error, setLastItem, reset, reroll, loadMore, retry };
 }
 
 // A column entry's height in units of column width. Besides images, columns
