@@ -2,73 +2,127 @@ import { useState, useEffect, useCallback } from "react";
 import seedrandom from "seedrandom";
 import { API_BASE } from "./config";
 
-export default function useGetData(id, colCount) {
+export default function useGetData(id, colCount, search) {
     const [lastItem, setLastItem] = useState(null);
+    // offset is the cursor for the current request, in the server's paging
+    // units (result rank, or page number on home). It only ever advances to a
+    // nextOffset the server reported: pages are deduped server- and client-
+    // side, so counting the images we got back drifts behind and re-requests
+    // pages we already have.
     const [offset, setOffset] = useState(0);
+    const [nextOffset, setNextOffset] = useState(0);
+    const [retries, setRetries] = useState(0);
 
     const [images, setImages] = useState([]);
     const [freshImages, setFreshImages] = useState([]);
     const [columns, setColumns] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [wanderId, setWanderId] = useState(null);
-    const [offsetOffset, setOffsetOffset] = useState(0);
-    const [page, setPage] = useState(0);
-    useEffect(() => {
-        setWanderId(null)
-        setOffsetOffset(0)
-    }, [id])
 
+    // search ({key, vector}) only applies on pages without an id. Its vector
+    // is null while the query is still being embedded.
+    const searchKey = id ? null : search?.key ?? null;
+    const searchVector = searchKey ? search.vector : null;
+    const searchPending = !!searchKey && !searchVector;
+    const anchor = id ? "id:" + id : searchKey || "home";
+    const home = !id && !searchKey;
 
+    // When an id or search runs out of results we "wander" on from the last
+    // image. Wander state is tagged with the anchor it belongs to, so it
+    // can't leak into the next page.
+    const [wander, setWander] = useState(null);
+    const wanderId = wander?.anchor === anchor ? wander.id : null;
+    const offsetOffset = wander?.anchor === anchor ? wander.offset : 0;
+
+    let reset = useCallback(() => {
+        setOffset(0)
+        setNextOffset(0)
+        setImages([])
+        setError(null)
+    }, []);
+
+    // The UI resets before it navigates, but browser back/forward doesn't go
+    // through it: start the new anchor over rather than paging into it from a
+    // stale cursor (the fetch already fired with it is superseded).
     useEffect(() => {
-        setLoading(true);
-        let multiplier = 6;
-        let computedOffset = Math.max(offset - offsetOffset, 0);
-        let computedLimit = multiplier * colCount;
-        if (!id) {
-            computedOffset = page;
+        setWander(null);
+        if (offset !== 0 || images.length > 0) {
+            reset();
+            setLastItem(null);
+            setRetries((r) => r + 1);
         }
-        let url = API_BASE + "/neighbors?" +
-            new URLSearchParams({
-                id: wanderId || id,
-                limit: computedLimit,
-                offset: computedOffset,
+    }, [anchor]);
+
+    useEffect(() => {
+        if (searchPending) return;
+        setLoading(true);
+        let stale = false;
+        const limit = 6 * colCount;
+        const requestOffset = Math.max(offset - offsetOffset, 0);
+        let request;
+        if (searchKey && !wanderId) {
+            request = fetch(API_BASE + "/vectorNeighbors", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ vector: searchVector, limit, offset: requestOffset }),
             });
-        fetch(url)
-            .then((res) => res.json())
+        } else {
+            request = fetch(API_BASE + "/neighbors?" +
+                new URLSearchParams({
+                    id: wanderId || id,
+                    limit,
+                    offset: requestOffset,
+                }));
+        }
+        request
+            .then((res) => {
+                if (!res.ok) throw new Error("neighbors " + res.status);
+                return res.json();
+            })
             .then((newData) => {
-                let newImages = newData?.images;
-                newImages = newOnly(newImages || [], images);
+                if (stale) return;
+                const raw = newData?.images || [];
+                // Servers older than nextOffset paged by limit (or by 1 on home).
+                const next = offsetOffset +
+                    (newData?.nextOffset ?? requestOffset + (home ? 1 : limit));
+                const newImages = newOnly(raw, images);
+                setError(null);
 
-                if (!newImages || newImages.length == 0) {
-                    console.log("END!")
-                    if (id) {
-                        // Nothing to wander from if this block had no neighbors at all.
+                if (newImages.length == 0) {
+                    if (raw.length == 0 && !home) {
+                        console.log("END!")
+                        // Nothing to wander from if there were no results at all.
                         if (images.length === 0) return
-                        setWanderId(images[images.length - 1].Id)
-                        setOffsetOffset(offset)
+                        setWander({ anchor, id: images[images.length - 1].Id, offset })
                     } else {
-                        // hack to request more
-                        setPage(page + 1)
+                        // A page of nothing new: skip past it.
+                        setNextOffset(next)
+                        setOffset(next)
                     }
-
                     return
                 }
-                if (id) {
+                // Keep search hits in rank order; shuffle neighbor pages.
+                if (id || wanderId) {
                     shuffleArray(newImages);
                 }
                 window.count = 10;
 
+                setNextOffset(next);
                 setImages([...images, ...newImages]);
                 setFreshImages([...freshImages, ...newImages])
-                setError(null);
             })
-            .finally(() => setLoading(false));
+            .catch((e) => {
+                if (!stale) setError(e);
+            })
+            .finally(() => {
+                if (!stale) setLoading(false);
+            });
 
         return () => {
+            stale = true;
             setLoading(false);
         };
-    }, [id, offset, wanderId, colCount]);
+    }, [id, offset, wanderId, colCount, searchKey, searchVector, retries]);
 
     useEffect(() => {
         if (freshImages.length === 0) return
@@ -78,11 +132,20 @@ export default function useGetData(id, colCount) {
                 if (i !== lastItem?.x) {
                     return []
                 }
-                if (window.scrollY > 0) {
-                    lastItem.y = 0;
-                    return [lastItem]
-                }
-                return c.slice(0, lastItem.y + 1);
+                // The clicked image stays put (or moves to the top if we were
+                // scrolled) and grows to two columns wide, overhanging its
+                // right neighbor, or its left one from the last column.
+                const { x, y, hero, heroDir, clip, ...item } = lastItem;
+                const clicked = {
+                    ...item,
+                    hero: true,
+                    heroDir: x + 1 < colCount ? "right" : "left",
+                };
+                if (window.scrollY > 0) return [clicked];
+                const above = c.slice(0, y)
+                    .filter((it) => !it.spacer)
+                    .map(({ hero, heroDir, ...it }) => it);
+                return [...above, clicked];
             });
             window.scrollTo(0, 0);
         }
@@ -94,22 +157,50 @@ export default function useGetData(id, colCount) {
         setFreshImages([])
         setColumns(newColumns)
 
-    }, [id, freshImages, columns, offset, page, colCount, lastItem])
-
-    let reset = useCallback(() => {
-        setOffset(0)
-        setPage(0)
-        setImages([])
-    }, [setOffset]);
+    }, [id, searchKey, freshImages, columns, offset, colCount, lastItem])
 
     let loadMore = useCallback(() => {
-        setOffset(images.length)
-        setPage(page + 1)
-    }, [setOffset, images]);
-    return { columns, loading, error, setLastItem, reset, loadMore };
+        setOffset(nextOffset)
+    }, [nextOffset]);
+
+    let retry = useCallback(() => {
+        setError(null)
+        setRetries((r) => r + 1)
+    }, []);
+
+    // Report a pending search as loading so infinite scroll waits for it.
+    return { columns, loading: loading || searchPending, error, setLastItem, reset, loadMore, retry };
 }
 
+// A column entry's height in units of column width. Besides images, columns
+// hold spacers (the hole a hero overhangs) and images clipped to fit above one.
+export function unitsOf(item) {
+    if (item.spacer) return item.units;
+    if (item.clip != null) return item.clip;
+    return (item.Height / item.Width) * (item.hero ? 2 : 1);
+}
 
+// Don't clip an image down to a sliver to fill above a hero; leave a gap.
+const MIN_CLIP = 0.25;
+
+// A hero overhangs a neighbor column, which needs a hole cut for it: images
+// down to the hero's top, the last one clipped, then a spacer. Returns the
+// hole still to be cut, if any.
+function pendingHole(columns) {
+    for (let i = 0; i < columns.length; i++) {
+        let top = 0;
+        for (const item of columns[i]) {
+            if (item.hero) {
+                const col = item.heroDir === "left" ? i - 1 : i + 1;
+                if (col < 0 || col >= columns.length) return null;
+                if (columns[col].some((it) => it.spacer)) return null;
+                return { col, top, bottom: top + unitsOf(item) };
+            }
+            top += unitsOf(item);
+        }
+    }
+    return null;
+}
 
 function collateListBalanced(newItems, columns, oldColumns) {
     let skipList = {};
@@ -119,8 +210,8 @@ function collateListBalanced(newItems, columns, oldColumns) {
         heights = heights.map(
             (h, i) =>
                 oldColumns[i]?.reduce((a, b) => {
-                    skipList[b.Id] = true;
-                    return a + b?.Height / b?.Width;
+                    if (b.Id) skipList[b.Id] = true;
+                    return a + unitsOf(b);
                 }, 0) ?? 0,
         );
     }
@@ -129,17 +220,33 @@ function collateListBalanced(newItems, columns, oldColumns) {
     if (oldColumns) {
         oldColumns.forEach((list, i) => {
             if (i >= columns) return
-            result[i] = list;
+            result[i] = [...list];
         });
     }
+    let hole = pendingHole(result);
     let list = newItems.filter((item) => !skipList[item.Id]);
     let i = 0;
     while (i < list.length) {
         let item = list[i];
         let minHeight = Math.min(...heights); // Find the smallest height
         let index = heights.findIndex((height) => height === minHeight); // first column w smallest height
-        i++;
         let aspectRatio = item.Height / item.Width;
+        if (hole && index === hole.col) {
+            const gap = hole.top - heights[index];
+            if (gap < MIN_CLIP || aspectRatio >= gap) {
+                if (gap >= MIN_CLIP) {
+                    result[index].push({ ...item, clip: gap });
+                    heights[index] = hole.top;
+                    i++;
+                }
+                const units = Math.max(hole.bottom - heights[index], 0);
+                result[index].push({ spacer: true, units });
+                heights[index] += units;
+                hole = null;
+                continue;
+            }
+        }
+        i++;
         result[index].push(item); // Push this item into the column with the smallest height
         heights[index] += aspectRatio; // Increase the total height of this column
     }

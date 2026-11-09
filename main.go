@@ -35,8 +35,9 @@ func main() {
 }
 
 type Server struct {
-	db    *gorm.DB
-	seeds randomSeeds
+	db       *gorm.DB
+	seeds    randomSeeds
+	embedder *embedder // nil when EMBED_URL is unset; search is then disabled
 }
 
 type Template struct {
@@ -72,6 +73,16 @@ var runCmd = &cli.Command{
 			Value:   ":6000",
 			EnvVars: []string{"LISTEN_ADDR"},
 		},
+		&cli.StringFlag{
+			Name:    "embed-url",
+			Usage:   "base URL of the search encoder (embed/serve.py); enables search",
+			EnvVars: []string{"EMBED_URL"},
+		},
+		&cli.StringFlag{
+			Name:    "embed-token",
+			Usage:   "optional bearer token for the search encoder",
+			EnvVars: []string{"EMBED_TOKEN"},
+		},
 	},
 	Action: func(cctx *cli.Context) error {
 
@@ -80,6 +91,10 @@ var runCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
+		if embeddingDim, err = loadEmbeddingDim(db); err != nil {
+			return fmt.Errorf("reading embedding dimension: %w", err)
+		}
+		log.Infof("blocks.embedding is %d-dimensional", embeddingDim)
 
 		log.Infof("Configuring HTTP server")
 		// To initialize Sentry's handler, you need to initialize Sentry itself beforehand
@@ -123,11 +138,16 @@ var runCmd = &cli.Command{
 		e.Use(sentryecho.New(sentryecho.Options{}))
 
 		s := &Server{
-			db: db,
+			db:       db,
+			embedder: newEmbedder(cctx.String("embed-url"), cctx.String("embed-token")),
+		}
+		if s.embedder == nil {
+			log.Warn("EMBED_URL not set; search is disabled")
 		}
 
 		e.GET("/neighbors", s.handleGetNeighbors)
 		e.POST("/vectorNeighbors", s.handleVectorNeighbors)
+		e.POST("/embed", s.handleEmbed)
 		e.POST("/api/flag", s.handleFlag)
 		atd := cctx.String("auto-tls-domain")
 		if atd != "" {
@@ -174,11 +194,15 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 			log.Error(err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "audit failed")
 		}
-		return e.JSON(http.StatusOK, neighborsResults{Images: images})
+		return e.JSON(http.StatusOK, neighborsResults{Images: images, NextOffset: offset + limit})
 	}
 
 	var images []imageMeta
+	// Neighbor offsets count result ranks (MMR scales them into its pool
+	// internally); the home page's offset is a page number.
+	nextOffset := offset + limit
 	if blockId == "" || blockId == "null" || blockId == "undefined" {
+		nextOffset = offset + 1
 		// Home page: blend neighbors of three cached seed blocks, rotating
 		// through the seed list as offset (the page number) grows.
 		seeds := s.seeds.get()
@@ -196,15 +220,24 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 			images = append(images, batch...)
 		}
 	} else {
+		// ?mmr=<lambda> overrides the diversity weight for tuning; 1 is plain kNN.
+		lambda := float32(mmrDefaultLambda)
+		if v := e.QueryParam("mmr"); v != "" {
+			f, err := strconv.ParseFloat(v, 32)
+			if err != nil || f < 0 || f > 1 {
+				return echo.NewHTTPError(http.StatusBadRequest, "mmr must be between 0 and 1")
+			}
+			lambda = float32(f)
+		}
 		var err error
-		images, err = s.nearestBlocks(embeddingOfBlock, blockId, limit, offset)
+		images, err = s.diverseNeighbors(blockId, limit, offset, lambda)
 		if err != nil {
 			log.Error(err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "neighbors failed")
 		}
 	}
 
-	return e.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images)})
+	return e.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images), NextOffset: nextOffset})
 }
 
 const (
@@ -253,5 +286,5 @@ func (s *Server) handleVectorNeighbors(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "vector neighbors search failed")
 	}
 
-	return c.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images)})
+	return c.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images), NextOffset: offset + limit})
 }

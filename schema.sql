@@ -1,3 +1,4 @@
+-- pgvector >= 0.8 (halfvec, parallel HNSW builds, iterative index scans).
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS blocks (
@@ -13,10 +14,17 @@ CREATE TABLE IF NOT EXISTS blocks (
     phash BIGINT DEFAULT null,
     nsfw BOOLEAN DEFAULT null,
     gif BOOLEAN DEFAULT null,
-    -- L2-normalized (search orders by inner product, <#>). The dimension must
-    -- match embeddingDim in queries.go.
-    embedding vector(512)
+    -- L2-normalized (search orders by inner product, <#>). Half precision
+    -- halves the storage and HNSW index size with no visible loss in search
+    -- quality. The dimension is the encoder's (SigLIP 2 so400m: 1152; base:
+    -- 768, as in river2m_base); the server reads it at startup.
+    embedding halfvec(1152)
 );
+
+-- For bulk loads, drop this first and rebuild it afterwards in parallel, with
+-- maintenance_work_mem large enough to hold the graph (see make_river1m.sh).
+CREATE INDEX IF NOT EXISTS blocks_embedding_hnsw
+    ON blocks USING hnsw (embedding halfvec_ip_ops) WITH (m = 16, ef_construction = 64);
 
 CREATE TABLE IF NOT EXISTS channels (
     id INTEGER PRIMARY KEY,

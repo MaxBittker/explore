@@ -6,6 +6,7 @@ import copy from 'clipboard-copy'
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ReactComponent as ArenaLogo } from "../public/arena.svg";
 import { API_BASE, SITE_URL } from "./config";
+import openArena from "./openArena";
 let last_hit = 0;
 
 function flagBlock(id) {
@@ -32,35 +33,59 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
 
 
     let aspectRatio = item.Width / item.Height;
-    let w = cWidth;
-    let h = cWidth / aspectRatio;
+    // The clicked image (hero) is two columns wide, overhanging its neighbor
+    // column, which leaves a hole for it. An image above that hole is clipped
+    // to fit (item.clip, in column widths) and shows only its top.
+    let w = item.hero ? cWidth * 2 : cWidth;
+    let h = w / aspectRatio;
+    let boxH = item.clip != null ? item.clip * cWidth : h;
 
     let [appliedFlag, flag] = flagBlock(item.Id)
+    // Fade in over the placeholder grey once loaded. Keyed by src so a reused
+    // element doesn't count the previous image.
+    let [loadedSrc, setLoadedSrc] = useState(null);
+    let loaded = loadedSrc === item.Thumb;
+    let imgRef = useCallback((el) => {
+        if (el?.complete && el.naturalWidth) setLoadedSrc(el.getAttribute("src"));
+    }, []);
 
     return (
         <ContextMenu.Root>
-            <ContextMenu.Trigger className="ContextMenuTrigger">
+            <ContextMenu.Trigger
+                className={"ContextMenuTrigger" + (item.hero ? " hero" : "")}
+                style={item.hero ? { width: cWidth, height: h } : undefined}
+            >
                 <Link
                     to={'?id=' + item.Id}
                     className={"img-container"}
+                    style={{
+                        width: w,
+                        height: boxH,
+                        marginLeft: item.hero && item.heroDir === "left" ? -cWidth : 0,
+                    }}
                     onClick={(e) => {
                         if (e.ctrlKey || e.metaKey) return
                         reset(0);
-                        setLastItem({ ...item, x: index, y: i });
+                        const { hero, heroDir, clip, ...plain } = item;
+                        setLastItem({ ...plain, x: index, y: i });
                     }}
                 >
                     {appliedFlag && <div className="flag-thanks">   Marked as {appliedFlag}! Thank you
                     </div>}
                     <img
+                        ref={imgRef}
                         width={w}
                         height={h}
+                        className={loaded ? "loaded" : undefined}
                         style={{
                             width: w + "px",
                             height: h + "px",
                         }}
                         key={i}
                         src={item.Thumb}
+                        decoding="async"
                         onLoad={(e) => {
+                            setLoadedSrc(e.target.getAttribute("src"));
                             if (!elementIsVisibleInViewport(e.target)) {
                                 return;
                             }
@@ -82,7 +107,7 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                 <ContextMenu.Content className="ContextMenuContent" sideOffset={5} align="end">
                     <ContextMenu.Item onSelect={() => {
                         let url = "https://www.are.na/block/" + item.Id;
-                        window.open(url, "_blank").focus();
+                        openArena(url);
                     }}
                         className="ContextMenuItem">
                         Open in Are.na <div className="RightSlot">
