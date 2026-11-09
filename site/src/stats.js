@@ -2,11 +2,14 @@ import { API_BASE } from "./config";
 
 // Impression and click beacons for block_stats. An impression is a loaded
 // thumbnail at least half on screen, counted once per page view (until
-// resetImpressions). Ids are batched and sent with sendBeacon, which survives
-// page unloads and posts text/plain, so there's no CORS preflight.
+// resetImpressions). Ids are sent with sendBeacon (survives unloads, posts
+// text/plain so there's no CORS preflight) when the page is hidden (tab
+// switch, app switch, close), and at most once a FLUSH_MS while browsing, so
+// a tab killed without a hide event (iOS, in-app browsers) loses at most a
+// minute. Idle tabs send nothing; a short visit costs one small request.
 
-const FLUSH_MS = 30000;
-const MAX_BATCH = 200;
+const FLUSH_MS = 60000;
+const MAX_BATCH = 500;
 
 let seen = new Set();
 let impressions = [];
