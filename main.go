@@ -184,14 +184,18 @@ var runCmd = &cli.Command{
 		}
 		go s.flushStatsLoop()
 
-		// Write out the last minute of block stats before exiting.
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
+		// Write out the last minute of block stats, then die of the signal
+		// as before: the prod loop (explore-run.sh) stops on a clean exit and
+		// restarts only when the server is killed.
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigs
 		if err := s.flushStats(); err != nil {
 			log.Errorf("flushing block stats: %v", err)
 		}
-		return nil
+		signal.Reset()
+		syscall.Kill(os.Getpid(), sig.(syscall.Signal))
+		select {}
 
 	},
 }
