@@ -72,3 +72,11 @@ CREATE TABLE IF NOT EXISTS block_stats (
     impressions INTEGER NOT NULL DEFAULT 0,
     clicks INTEGER NOT NULL DEFAULT 0
 ) WITH (fillfactor = 70);
+
+-- One extra block for a host's first page, so every block can be reached by
+-- clicking (backlinks.go). Computed offline; no foreign keys, so deleting
+-- blocks isn't blocked.
+CREATE TABLE IF NOT EXISTS backlinks (
+    host INTEGER PRIMARY KEY,
+    block INTEGER NOT NULL
+);

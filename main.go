@@ -222,7 +222,8 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 	// Neighbor offsets count result ranks (MMR scales them into its pool
 	// internally); the home page's offset is a page number.
 	nextOffset := offset + limit
-	if blockId == "" || blockId == "null" || blockId == "undefined" {
+	onBlock := !(blockId == "" || blockId == "null" || blockId == "undefined")
+	if !onBlock {
 		nextOffset = offset + 1
 		// Home page: blend neighbors of three cached seed blocks, rotating
 		// through the seed list as offset (the page number) grows.
@@ -258,7 +259,17 @@ func (s *Server) handleGetNeighbors(e echo.Context) error {
 		}
 	}
 
-	return e.JSON(http.StatusOK, neighborsResults{Images: dedupeByPhash(images), NextOffset: nextOffset})
+	images = dedupeByPhash(images)
+	if onBlock && offset == 0 {
+		// A failed lookup only costs the backlink, not the page.
+		if link, err := s.backlink(blockId); err != nil {
+			log.Errorf("backlink for %s: %v", blockId, err)
+		} else if link != nil {
+			images = withBacklink(images, *link, limit)
+		}
+	}
+
+	return e.JSON(http.StatusOK, neighborsResults{Images: images, NextOffset: nextOffset})
 }
 
 const (
