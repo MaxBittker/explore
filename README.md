@@ -8,6 +8,15 @@ Live at <https://river.maxbittker.com>.
   on `:6000` by default.
 - `embed.go`: `POST /embed` turns a search (form field `text`, or an `image`
   file) into a vector by calling the local encoder, `embed/serve.py`.
+- `minimap.go`, `minimap/`: the map in the info panel, a fixed 2D layout of ~1500
+  k-means cells seen through a fisheye lens centered on the current block or
+  search. `GET`/`POST /api/map/place` returns where that is and which cells
+  are truly most similar (the page inks those darker), and
+  `GET /api/map/jump` turns a click on a cell into a block.
+  `minimap/build.py` writes the cells from the image atlas: centroids and
+  positions to `minimap/cells.bin` (server), positions and sizes to
+  `site/public/minimap.json` (page). Without `cells.bin` the endpoints return
+  404 and the map stays on its whole-world view.
 - `schema.sql`: Postgres + pgvector (0.8 or newer) schema. Embeddings are
   `halfvec(N)` with an HNSW inner-product index; the server reads N from the
   database at startup (1152 for SigLIP 2 so400m, 768 for SigLIP 2 base).

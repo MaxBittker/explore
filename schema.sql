@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS blocks (
     votes INTEGER DEFAULT 0,
     phash BIGINT DEFAULT null,
     nsfw BOOLEAN DEFAULT null,
+    -- AI-generated (crowd "ai" flag); hidden like nsfw.
+    ai BOOLEAN DEFAULT null,
     gif BOOLEAN DEFAULT null,
     -- L2-normalized (search orders by inner product, <#>). Half precision
     -- halves the storage and HNSW index size with no visible loss in search
@@ -51,8 +53,9 @@ CREATE TABLE IF NOT EXISTS flags (
     voter text
 );
 
--- migration for databases created before the voter column
+-- migrations for databases created before the voter and ai columns
 ALTER TABLE flags ADD COLUMN IF NOT EXISTS voter text;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS ai boolean;
 CREATE INDEX IF NOT EXISTS flags_block_flag ON flags (block_id, flag);
 
 CREATE TABLE IF NOT EXISTS clusters (

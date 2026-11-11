@@ -20,6 +20,7 @@ import (
 var crowdThresholds = map[string]int64{
 	"cool":   2, // add to the home-page clusters
 	"nsfw":   2, // hide everywhere
+	"ai":     2, // AI-generated: hide everywhere
 	"boring": 3, // remove from the home-page clusters
 }
 
@@ -109,6 +110,8 @@ func (s *Server) applyFlag(flag string, blockID int) error {
 		return s.db.Exec("DELETE FROM clusters WHERE cluster_id IN (SELECT cluster_id FROM clusters WHERE block_id = ?)", blockID).Error
 	case "nsfw":
 		return s.db.Exec("UPDATE blocks SET nsfw = true WHERE id = ?", blockID).Error
+	case "ai":
+		return s.db.Exec("UPDATE blocks SET ai = true WHERE id = ?", blockID).Error
 	case "cool":
 		return s.db.Exec(`
 			INSERT INTO clusters (cluster_id, block_id)

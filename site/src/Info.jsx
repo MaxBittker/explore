@@ -7,6 +7,8 @@ import { useLocalStorage } from "usehooks-ts";
 import attention from '../public/attention.gif';
 import spiral2 from "../public/spiral3.png";
 
+import Minimap from "./Minimap";
+
 import "./info.css"
 
 let challengeItems = [
@@ -31,7 +33,8 @@ let challengeItems = [
   "Microscopic Thing",
   "Cool Sword"
 ]
-export default function Info({ style, setInfoOpen, infoOpen }) {
+// map: the Minimap's props (minus size), shown while the panel is open.
+export default function Info({ style, setInfoOpen, infoOpen, map }) {
   const [play] = useSound(click, { volume: 0.1 });
   const [seenItems, setSeenItems] = useLocalStorage('seenItems', []);
 
@@ -51,6 +54,7 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
     <Rnd
       disableDragging={window.innerWidth < 800}
       enableResizing={false}
+      cancel=".minimap"
       default={{
         x: -w + 4,
         y: -2,
@@ -81,6 +85,8 @@ export default function Info({ style, setInfoOpen, infoOpen }) {
           <br />
 
         </span>
+        {/* as wide as the panel's text: its width less margin, border, padding */}
+        {map && <Minimap {...map} size={w - 40} />}
         <summary>Optional Challenge, find these items: </summary>
         <ul>
           {challengeItems.filter((item) => {

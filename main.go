@@ -41,6 +41,7 @@ type Server struct {
 	seeds    randomSeeds
 	embedder *embedder // nil when EMBED_URL is unset; search is then disabled
 	stats    *blockStats
+	minimap  *minimap // nil when minimap/cells.bin is missing; the map is then hidden
 }
 
 type Template struct {
@@ -151,12 +152,18 @@ var runCmd = &cli.Command{
 		if s.embedder == nil {
 			log.Warn("EMBED_URL not set; search is disabled")
 		}
+		if s.minimap, err = loadMinimap(minimapPath, embeddingDim); err != nil {
+			log.Warnf("minimap disabled: %v", err)
+		}
 
 		e.GET("/neighbors", s.handleGetNeighbors)
 		e.POST("/vectorNeighbors", s.handleVectorNeighbors)
 		e.POST("/embed", s.handleEmbed)
 		e.POST("/api/flag", s.handleFlag)
 		e.POST("/api/stats", s.handleStats)
+		e.GET("/api/map/place", s.handleMapPlaceBlock)
+		e.POST("/api/map/place", s.handleMapPlaceVector)
+		e.GET("/api/map/jump", s.handleMapJump)
 		atd := cctx.String("auto-tls-domain")
 		if atd != "" {
 			cachedir, err := os.UserCacheDir()

@@ -33,7 +33,8 @@ const imageColumns = `blocks.id as Id, blocks.thumb as Thumb, COALESCE(NULLIF(bl
 // visibleBlocks filters out blocks that can't be shown in the grid.
 const visibleBlocks = `blocks.thumb IS NOT NULL
 		and blocks.embedding is not null
-		and nsfw is not true`
+		and nsfw is not true
+		and ai is not true`
 
 // embeddingDim is the size of blocks.embedding (halfvec(N)), read from the
 // database at startup so one binary serves either encoder's DB: SigLIP 2

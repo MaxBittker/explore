@@ -162,6 +162,16 @@ export default function App() {
         <Info
           infoOpen={infoOpen}
           setInfoOpen={setInfoOpen}
+          map={{
+            id,
+            search,
+            play,
+            onJump: (blockId) => {
+              reset();
+              setLastItem(null);
+              navigate("/?id=" + blockId);
+            },
+          }}
         ></Info>
       </div>
 

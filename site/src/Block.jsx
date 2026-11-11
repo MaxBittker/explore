@@ -1,13 +1,14 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ArrowTopRightIcon, ExclamationTriangleIcon, CopyIcon, MinusCircledIcon, StarIcon, Link2Icon } from "@radix-ui/react-icons";
+import { ArrowTopRightIcon, ExclamationTriangleIcon, CopyIcon, MinusCircledIcon, StarIcon, Link2Icon, MagicWandIcon } from "@radix-ui/react-icons";
 import copy from 'clipboard-copy'
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ReactComponent as ArenaLogo } from "../public/arena.svg";
 import { API_BASE, SITE_URL } from "./config";
 import openArena from "./openArena";
 import { observeImpression, recordClick } from "./stats";
+import { setHoveredBlock } from "./mapHover";
 let last_hit = 0;
 
 function flagBlock(id) {
@@ -72,6 +73,8 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                         height: boxH,
                         marginLeft: item.hero && item.heroDir === "left" ? -cWidth : 0,
                     }}
+                    onPointerEnter={(e) => e.pointerType === "mouse" && setHoveredBlock(item.Id)}
+                    onPointerLeave={() => setHoveredBlock(null)}
                     onClick={(e) => {
                         if (track) recordClick(item.Id);
                         if (e.ctrlKey || e.metaKey) return
@@ -154,6 +157,10 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
 
                                 <ContextMenu.Item className="ContextMenuItem Secondary" onSelect={() => flag(item.Id, "nsfw")} >
                                     Flag NSFW <div className="RightSlot"><ExclamationTriangleIcon /></div>
+                                </ContextMenu.Item>
+
+                                <ContextMenu.Item className="ContextMenuItem Secondary" onSelect={() => flag(item.Id, "ai")} >
+                                    Flag AI <div className="RightSlot"><MagicWandIcon /></div>
                                 </ContextMenu.Item>
 
                                 <ContextMenu.Item className="ContextMenuItem Secondary" onSelect={() => flag(item.Id, "duplicate")} >
