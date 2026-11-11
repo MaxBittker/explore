@@ -128,8 +128,8 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                     <ContextMenu.Separator className="ContextMenuSeparator" />
 
                     <ContextMenu.Item onSelect={() => {
-                        let url = SITE_URL + "/?id=" + item.Id;
-                        window.open(url, "_blank").focus();
+                        let url = "https://www.are.na/block/" + item.Id;
+                        window.open(url, "_blank")?.focus();
                     }}
                         className="ContextMenuItem">
                         Open in new tab <div className="RightSlot">  <ArrowTopRightIcon /></div>
