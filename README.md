@@ -34,8 +34,7 @@ Environment:
 
 - `DATABASE_URL`: Postgres connection string.
 - `FLAG_PASSWORD`: admin password; flags sent with it apply immediately.
-  Visitor flags apply once enough distinct visitors agree (see
-  `crowdThresholds` in `flags.go`).
+  Visitor flags are only collected in the `flags` table, for review.
 - `LISTEN_ADDR` (or `--listen`): listen address, default `:6000`.
 - `EMBED_URL` (optional `EMBED_TOKEN`): the search encoder, e.g.
   `http://127.0.0.1:6100`. Without it, search returns 503.

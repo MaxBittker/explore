@@ -13,17 +13,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// crowdThresholds is how many distinct visitors must flag a block before the
-// flag takes effect. Flags not listed here (e.g. "duplicate") are only
-// recorded. A request carrying the admin password (FLAG_PASSWORD) applies
-// its flag immediately.
-var crowdThresholds = map[string]int64{
-	"cool":   2, // add to the home-page clusters
-	"nsfw":   2, // hide everywhere
-	"ai":     2, // AI-generated: hide everywhere
-	"boring": 3, // remove from the home-page clusters
-}
-
 type FlagData struct {
 	Id   int    `json:"id"`
 	Flag string `json:"flag"`
@@ -48,8 +37,8 @@ func clientIP(req *http.Request) string {
 	return host
 }
 
-// voterID is a stable pseudonymous id for a visitor, used to count distinct
-// flaggers without storing raw IPs.
+// voterID is a stable pseudonymous id for a visitor, recorded with each flag
+// so distinct flaggers can be counted without storing raw IPs.
 func voterID(ip string) string {
 	sum := sha256.Sum256([]byte("river-flag-voter:" + ip))
 	return hex.EncodeToString(sum[:8])
@@ -72,21 +61,9 @@ func (s *Server) handleFlag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
 	}
 
-	apply := isAdmin
-	if threshold, ok := crowdThresholds[flagData.Flag]; ok && !apply {
-		var voters int64
-		err := s.db.Raw(
-			"SELECT count(DISTINCT voter) FROM flags WHERE block_id = ? AND flag = ? AND voter IS NOT NULL",
-			flagData.Id, flagData.Flag,
-		).Scan(&voters).Error
-		if err != nil {
-			log.Error(err)
-			return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
-		}
-		apply = voters >= threshold
-	}
-
-	if apply {
+	// Visitor flags are only collected: nothing a visitor sends changes what
+	// the site shows. Only a flag carrying the admin password is acted on.
+	if isAdmin {
 		if err := s.applyFlag(flagData.Flag, flagData.Id); err != nil {
 			log.Error(err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "Could not flag the item")
@@ -102,8 +79,8 @@ func (s *Server) handleFlag(c echo.Context) error {
 	})
 }
 
-// applyFlag performs a flag's moderation action. Each action is idempotent,
-// so votes past the threshold are harmless.
+// applyFlag performs a flag's moderation action for an admin. Each action is
+// idempotent. Flags not listed here (e.g. "duplicate") are only recorded.
 func (s *Server) applyFlag(flag string, blockID int) error {
 	switch flag {
 	case "boring":

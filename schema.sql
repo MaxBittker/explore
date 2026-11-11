@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     votes INTEGER DEFAULT 0,
     phash BIGINT DEFAULT null,
     nsfw BOOLEAN DEFAULT null,
-    -- AI-generated (crowd "ai" flag); hidden like nsfw.
+    -- AI-generated (set by an admin "ai" flag); hidden like nsfw.
     ai BOOLEAN DEFAULT null,
     gif BOOLEAN DEFAULT null,
     -- L2-normalized (search orders by inner product, <#>). Half precision
@@ -48,8 +48,7 @@ CREATE TABLE IF NOT EXISTS flags (
     id SERIAL PRIMARY KEY,
     block_id INTEGER REFERENCES blocks(id),
     flag text,
-    -- pseudonymous visitor id (hashed IP); NULL for flags recorded before
-    -- crowd thresholds existed
+    -- pseudonymous visitor id (hashed IP); NULL for the oldest flags
     voter text
 );
 
