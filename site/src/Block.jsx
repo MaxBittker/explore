@@ -120,6 +120,13 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
 
             <ContextMenu.Portal>
                 <ContextMenu.Content className="ContextMenuContent" sideOffset={5} align="end">
+                    <ContextMenu.Item className="ContextMenuItem" onSelect={() => {
+                        copyImage(item.Thumb).catch((err) => console.warn("copy image failed", err));
+                    }}>
+                        Copy Image <div className="RightSlot"><ImageIcon /></div>
+                    </ContextMenu.Item>
+                    <ContextMenu.Separator className="ContextMenuSeparator" />
+
                     <ContextMenu.Item onSelect={() => {
                         let url = "https://www.are.na/block/" + item.Id;
                         openArena(url);
@@ -144,11 +151,6 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                         copy(SITE_URL + "/?id=" + item.Id)
                     }}>
                         Copy Link <div className="RightSlot"><Link2Icon /></div>
-                    </ContextMenu.Item>
-                    <ContextMenu.Item className="ContextMenuItem" onSelect={() => {
-                        copyImage(item.Thumb).catch((err) => console.warn("copy image failed", err));
-                    }}>
-                        Copy Image <div className="RightSlot"><ImageIcon /></div>
                     </ContextMenu.Item>
 
                     <ContextMenu.Separator className="ContextMenuSeparator" />
