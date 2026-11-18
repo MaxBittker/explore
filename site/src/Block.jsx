@@ -1,12 +1,13 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ArrowTopRightIcon, ExclamationTriangleIcon, CopyIcon, MinusCircledIcon, StarIcon, Link2Icon, MagicWandIcon } from "@radix-ui/react-icons";
+import { ArrowTopRightIcon, ExclamationTriangleIcon, CopyIcon, MinusCircledIcon, StarIcon, Link2Icon, MagicWandIcon, ImageIcon } from "@radix-ui/react-icons";
 import copy from 'clipboard-copy'
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { ReactComponent as ArenaLogo } from "../public/arena.svg";
 import { API_BASE, SITE_URL } from "./config";
 import openArena from "./openArena";
+import copyImage from "./copyImage";
 import { observeImpression, recordClick } from "./stats";
 import { setHoveredBlock } from "./mapHover";
 let last_hit = 0;
@@ -143,6 +144,11 @@ export default function Block({ item, i, index, cWidth, reset, setLastItem, play
                         copy(SITE_URL + "/?id=" + item.Id)
                     }}>
                         Copy Link <div className="RightSlot"><Link2Icon /></div>
+                    </ContextMenu.Item>
+                    <ContextMenu.Item className="ContextMenuItem" onSelect={() => {
+                        copyImage(item.Thumb).catch((err) => console.warn("copy image failed", err));
+                    }}>
+                        Copy Image <div className="RightSlot"><ImageIcon /></div>
                     </ContextMenu.Item>
 
                     <ContextMenu.Separator className="ContextMenuSeparator" />
